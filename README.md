@@ -4,12 +4,11 @@ Plataforma web integral para la gestión y seguimiento del proceso de selección
 
 ---
 
-## 🚀 Características y Módulos del Sistema
+## Características y Módulos del Sistema
 
 El sistema está organizado en módulos funcionales diseñados para distintos actores del proceso de selección:
 
 ### 1. Portal de Postulación Pública (`/`)
-
 - Formulario de registro abierto para postulantes externos.
 - Validación de datos personales (Nombre, RUT, Correo, Teléfono).
 - Selección de familia de cargo (Operaciones, Administración, Mantenimiento, etc.).
@@ -17,7 +16,6 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 - Fondo personalizable institucional y confirmación inmediata de postulación.
 
 ### 2. Control de Acceso y Perfiles (`/login`)
-
 - Sistema de autenticación basado en roles con permisos dinámicos:
   - **Analista de Reclutamiento:** Gestión de candidatos y generación de solicitudes de evaluación.
   - **Profesional Evaluador:** Aplicación de pruebas, entrevistas y registro de dictámenes clínicos.
@@ -25,7 +23,6 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
   - **Administrador Académico / General:** Acceso completo a todos los módulos y configuraciones.
 
 ### 3. Panel de Control y KPIs (`/panel`)
-
 - Indicadores en tiempo real:
   - Total de candidatos en el sistema.
   - Evaluaciones en estado **Pendiente**, **En proceso** y **Finalizada**.
@@ -33,20 +30,17 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 - Botones de acción rápida para registrar candidatos o generar solicitudes.
 
 ### 4. Gestión de Candidatos (`/candidatos`)
-
 - Directorio centralizado de postulantes con búsqueda predictiva por nombre y RUT.
 - Filtros por familia de cargo.
 - Diálogo modal para registrar, editar y eliminar antecedentes.
 - Ficha de vista rápida con historial de solicitudes asociadas.
 
 ### 5. Gestión de Solicitudes (`/solicitudes`)
-
 - Tablero maestro de solicitudes con filtros cruzados por estado, familia de cargo y rango de fechas.
 - Registro de nuevas solicitudes con asignación de prioridad y psicólogo evaluador responsable.
 - Badges visuales de estado y dictamen asignado.
 
 ### 6. Ficha Clínica y Evaluación Psicolaboral (`/solicitudes/:id`)
-
 - Flujo interactivo de avance de estados (**Pendiente** $\rightarrow$ **En proceso** $\rightarrow$ **Finalizada**).
 - Formulario clínico con fecha de entrevista, notas y conclusiones diagnósticas.
 - Emisión de dictamen final: **Recomendado**, **Con observaciones** o **No recomendado**.
@@ -54,7 +48,7 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 
 ---
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 - **Frontend Core:** [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
 - **Framework & Routing:** [TanStack Start](https://tanstack.com/start) + [TanStack Router](https://tanstack.com/router) (file-based routing con tipado estricto)
@@ -65,7 +59,7 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```text
 ├── public/                 # Archivos estáticos públicos (favicon, robots.txt)
@@ -104,7 +98,7 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 
 ---
 
-## 💻 Instalación y Desarrollo Local
+## Instalación y Desarrollo Local
 
 ### Prerrequisitos
 
@@ -134,7 +128,7 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 
 ---
 
-## 📜 Scripts Disponibles
+## Scripts Disponibles
 
 | Comando           | Descripción                                                             |
 | :---------------- | :---------------------------------------------------------------------- |
@@ -146,6 +140,6 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 
 ---
 
-## 🤝 Conectividad con Lovable
+## Conectividad con Lovable
 
 Este proyecto se encuentra sincronizado con la plataforma [Lovable](https://lovable.dev). Todo cambio integrado en la rama conectada se refleja de manera bidireccional en el editor visual.
