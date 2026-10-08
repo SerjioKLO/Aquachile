@@ -137,9 +137,3 @@ El sistema está organizado en módulos funcionales diseñados para distintos ac
 | `npm run preview` | Ejecuta la vista previa local de la compilación de producción.          |
 | `npm run lint`    | Ejecuta ESLint para verificar buenas prácticas y calidad del código.    |
 | `npm run format`  | Aplica el formateo de código con Prettier en todo el proyecto.          |
-
----
-
-## Conectividad con Lovable
-
-Este proyecto se encuentra sincronizado con la plataforma [Lovable](https://lovable.dev). Todo cambio integrado en la rama conectada se refleja de manera bidireccional en el editor visual.
