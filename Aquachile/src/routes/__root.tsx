@@ -81,16 +81,39 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "AquaChile | Sistema de Selección y Evaluación Psicolaboral" },
+      {
+        name: "description",
+        content:
+          "Plataforma integral de postulación ciudadana y evaluación psicolaborale de AquaChile.",
+      },
+      { name: "author", content: "AquaChile & Duoc UC" },
+      {
+        property: "og:title",
+        content: "AquaChile | Selección y Evaluación Psicolaboral",
+      },
+      {
+        property: "og:description",
+        content:
+          "Portal de postulación ciudadana y módulo de gestión de entrevistas psicolaborales para AquaChile.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      {
+        rel: "preconnect",
+        href: "https://fonts.googleapis.com",
+      },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
@@ -106,11 +129,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es" className="scroll-smooth antialiased">
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="min-h-screen font-sans">
         {children}
         <Scripts />
       </body>
