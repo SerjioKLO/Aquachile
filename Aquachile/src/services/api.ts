@@ -8,7 +8,7 @@ import type {
   Dictamen,
 } from "@/lib/domain";
 
-const API_BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:8080/api";
+const API_BASE = (import.meta.env["VITE_API_URL"] as string) || "http://localhost:8080/api";
 
 // DTO interfaces matching backend Spring Boot
 export interface BackendCandidatoDTO {

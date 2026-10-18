@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type DragEvent } from "react";
 import {
@@ -68,18 +69,31 @@ function formatearRut(valor: string): string {
   return `${conPuntos}-${dv}`;
 }
 
+interface FormErrores {
+  nombre?: string;
+  rut?: string;
+  correo?: string;
+  telefono?: string;
+  familia?: string;
+  cargo?: string;
+  cv?: string;
+}
+
 export function Postulacion() {
   const { guardarCandidato } = useDatos();
   const [form, setForm] = useState(formVacio);
   const [cvArchivo, setCvArchivo] = useState<{ nombre: string; tamano: string } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [errores, setErrores] = useState<FormErrores>({});
   const [enviado, setEnviado] = useState<{
     nombre: string;
     cargo: string;
     rut: string;
     fecha: string;
   } | null>(null);
+
+  const [cargando, setCargando] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
   const setCampo = (k: keyof typeof formVacio, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v as never }));
@@ -121,8 +135,8 @@ export function Postulacion() {
     procesarArchivo(archivo);
   }
 
-  function validar() {
-    const e: Record<string, string> = {};
+  function validar(): boolean {
+    const e: FormErrores = {};
     if (form.nombre.trim().length < 5) {
       e.nombre = "Ingrese nombre y apellido completo (mínimo 5 caracteres).";
     }
@@ -148,29 +162,80 @@ export function Postulacion() {
     return Object.keys(e).length === 0;
   }
 
-  function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!validar()) return;
 
-    guardarCandidato({
-      rut: form.rut,
-      nombre: form.nombre.trim(),
-      correo: form.correo.trim(),
-      telefono: form.telefono.trim(),
-      cargo: form.cargo.trim(),
-      familia: form.familia as FamiliaCargo,
-    });
+    setCargando(true);
+    setErrorEnvio(null);
 
-    setEnviado({
-      nombre: form.nombre.trim(),
-      cargo: form.cargo.trim(),
-      rut: form.rut,
-      fecha: new Date().toLocaleDateString("es-CL", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-    });
+    try {
+      // Inserción en la tabla Candidato de Supabase mapeando exactamente las columnas
+      let { error } = await supabase.from("Candidato").insert([
+        {
+          Rut: form.rut,
+          Nombre_Completo: form.nombre.trim(),
+          Correo: form.correo.trim(),
+          Telefono: form.telefono.trim(),
+          Cargo: form.cargo.trim(),
+          Familia: form.familia,
+        },
+      ]);
+
+      // Si la base de datos PostgreSQL/Supabase creó la tabla o columnas en minúsculas (sin comillas en DDL),
+      // PostgREST devuelve PGRST205 o PGRST204. Se provee fallback automático a minúsculas:
+      if (
+        error &&
+        (error.code === "PGRST205" ||
+          error.code === "PGRST204" ||
+          error.message?.includes("schema cache") ||
+          error.message?.includes("candidato"))
+      ) {
+        const fallbackRes = await supabase.from("candidato").insert([
+          {
+            rut: form.rut,
+            nombre_completo: form.nombre.trim(),
+            correo: form.correo.trim(),
+            telefono: form.telefono.trim(),
+            cargo: form.cargo.trim(),
+            familia: form.familia,
+          },
+        ]);
+        error = fallbackRes.error;
+      }
+
+      if (error) {
+        console.error("Error al registrar en Supabase:", error.message);
+        setErrorEnvio("Hubo un problema al registrar tu postulación. Inténtalo de nuevo.");
+        return;
+      }
+
+      // Sincronización con el contexto local
+      guardarCandidato({
+        rut: form.rut,
+        nombre: form.nombre.trim(),
+        correo: form.correo.trim(),
+        telefono: form.telefono.trim(),
+        cargo: form.cargo.trim(),
+        familia: form.familia as FamiliaCargo,
+      });
+
+      setEnviado({
+        nombre: form.nombre.trim(),
+        cargo: form.cargo.trim(),
+        rut: form.rut,
+        fecha: new Date().toLocaleDateString("es-CL", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+      });
+    } catch (err) {
+      console.error("Error de conexión:", err);
+      setErrorEnvio("Error de conexión con el servidor. Verifica tu conexión a internet.");
+    } finally {
+      setCargando(false);
+    }
   }
 
   function handleReset() {
@@ -494,14 +559,22 @@ export function Postulacion() {
                     )}
                   </div>
 
-                  {/* Botón de envío */}
+                  {/* Mensaje visual de error si falla la inserción en Supabase */}
+                  {errorEnvio && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                      {errorEnvio}
+                    </div>
+                  )}
+
+                  {/* Botón de envío con estado deshabilitado/cargando */}
                   <div className="pt-2">
                     <Button
                       type="submit"
-                      className="w-full h-11 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors"
+                      disabled={cargando}
+                      className="w-full h-11 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
                     >
-                      <span>Enviar postulación</span>
-                      <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />
+                      <span>{cargando ? "Guardando postulación..." : "Enviar postulación"}</span>
+                      {!cargando && <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />}
                     </Button>
                   </div>
 

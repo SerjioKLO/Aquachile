@@ -1,0 +1,12 @@
+{
+  "name": "aquachile-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix Aquachile run dev",
+    "build": "npm --prefix Aquachile run build",
+    "preview": "npm --prefix Aquachile run preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0"
+  }
+}
