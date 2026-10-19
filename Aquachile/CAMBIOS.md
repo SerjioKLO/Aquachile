@@ -27,6 +27,7 @@ Este documento detalla los problemas identificados, los archivos modificados y c
 ## 2. Detalle de Archivos Modificados y Creados
 
 ### A. Variables de Entorno
+
 - **Ruta**: `Aquachile/.env` y `.env` (raíz del workspace)
 - **Cambio realizado**: Corrección de la URL base de Supabase sin `/rest/v1/`.
 
@@ -43,6 +44,7 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_LG8Jn8sz_PNLept6lSMIpw_nN0ka4Af
 ---
 
 ### B. Inicialización del Cliente Supabase
+
 - **Ruta**: `Aquachile/src/lib/supabase.ts`
 - **Cambio realizado**: Lectura segura mediante notación indexada de variables de entorno y sanitización preventiva contra barras o rutas erróneas.
 
@@ -66,6 +68,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 ---
 
 ### C. Formulario de Postulación
+
 - **Ruta**: `Aquachile/src/routes/index.tsx`
 - **Cambio realizado**:
   1. Definición de la interfaz `FormErrores` para tipado estricto sin TS4111.
@@ -181,6 +184,7 @@ export function Postulacion() {
 ---
 
 ### D. Servicio de API Backend
+
 - **Ruta**: `Aquachile/src/services/api.ts`
 - **Cambio realizado**: Notación de corchetes para cumplir con `noPropertyAccessFromIndexSignature`.
 
@@ -195,6 +199,7 @@ const API_BASE = (import.meta.env["VITE_API_URL"] as string) || "http://localhos
 ---
 
 ### E. Dependencias del Frontend
+
 - **Ruta**: `Aquachile/package.json`
 - **Cambio realizado**: Inclusión formal de `@supabase/supabase-js`.
 
@@ -209,6 +214,7 @@ const API_BASE = (import.meta.env["VITE_API_URL"] as string) || "http://localhos
 ---
 
 ### F. Scripts en la Raíz del Repositorio
+
 - **Ruta**: `package.json` (raíz del workspace)
 - **Cambio realizado**: Configuración de scripts para delegar la ejecución a la carpeta del frontend.
 
@@ -231,9 +237,9 @@ const API_BASE = (import.meta.env["VITE_API_URL"] as string) || "http://localhos
 
 ## 3. Pruebas y Verificaciones Ejecutadas
 
-| Prueba | Comando | Resultado |
-|---|---|---|
-| Comprobación de Tipos | `npx tsc --noEmit` | **0 errores** |
-| Compilación de Producción | `npm run build` | **Compilación exitosa** (Cliente, SSR y Nitro) |
-| Inserción de Prueba Supabase | Script Node con `@supabase/supabase-js` | **HTTP 201 Created** |
-| Validación de Scripts | `npm run dev -- --help` | **Operativo desde raíz y subdirectorio** |
+| Prueba                       | Comando                                 | Resultado                                      |
+| ---------------------------- | --------------------------------------- | ---------------------------------------------- |
+| Comprobación de Tipos        | `npx tsc --noEmit`                      | **0 errores**                                  |
+| Compilación de Producción    | `npm run build`                         | **Compilación exitosa** (Cliente, SSR y Nitro) |
+| Inserción de Prueba Supabase | Script Node con `@supabase/supabase-js` | **HTTP 201 Created**                           |
+| Validación de Scripts        | `npm run dev -- --help`                 | **Operativo desde raíz y subdirectorio**       |

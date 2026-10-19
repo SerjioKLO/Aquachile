@@ -48,10 +48,7 @@ export function EstadoBadge({ estado }: { estado: EstadoSolicitud }) {
   );
 }
 
-const dictamenConfig: Record<
-  Dictamen,
-  { bg: string; text: string; border: string }
-> = {
+const dictamenConfig: Record<Dictamen, { bg: string; text: string; border: string }> = {
   Recomendado: {
     bg: "bg-emerald-50",
     text: "text-emerald-800",

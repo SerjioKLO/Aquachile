@@ -1,16 +1,10 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, NavLink, useNavigate, Outlet } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
-import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  LogOut,
-  Shield,
-  Layers,
-} from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, LogOut, Shield } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { useDatos } from "@/context/data-context";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { Permiso } from "@/lib/domain";
 
 const NAV: { to: string; label: string; icon: typeof Users; permiso: Permiso }[] = [
@@ -20,13 +14,13 @@ const NAV: { to: string; label: string; icon: typeof Users; permiso: Permiso }[]
   { to: "/administracion", label: "Administración", icon: Shield, permiso: "administrar" },
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppLayout({ children }: { children?: ReactNode }) {
   const { rol, nombreRol, usuarioActual, listo, salir, puede } = useAuth();
   const { backendConectado } = useDatos();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (listo && !rol) navigate({ to: "/", replace: true });
+    if (listo && !rol) navigate("/", { replace: true });
   }, [listo, rol, navigate]);
 
   if (!listo || !rol) {
@@ -42,7 +36,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Header institucional */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          
           <div className="flex items-center gap-6">
             <Link to="/panel" className="flex items-center gap-2">
               <span className="font-extrabold text-lg tracking-tight text-slate-950">
@@ -55,15 +48,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             <nav className="hidden md:flex items-center gap-1">
               {NAV.filter((n) => puede(n.permiso)).map((n) => (
-                <Link
+                <NavLink
                   key={n.to}
                   to={n.to}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-                  activeProps={{ className: "bg-slate-100 text-slate-950 font-semibold" }}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors",
+                      isActive && "bg-slate-100 text-slate-950 font-semibold",
+                    )
+                  }
                 >
                   <n.icon className="size-3.5 text-slate-500" aria-hidden="true" />
                   <span>{n.label}</span>
-                </Link>
+                </NavLink>
               ))}
             </nav>
           </div>
@@ -103,7 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               size="sm"
               onClick={() => {
                 salir();
-                navigate({ to: "/login", replace: true });
+                navigate("/login", { replace: true });
               }}
               className="border-slate-200 text-slate-700 hover:bg-slate-100 h-8 px-2.5 text-xs gap-1.5 rounded-md"
             >
@@ -111,28 +108,31 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span>Salir</span>
             </Button>
           </div>
-
         </div>
 
         {/* Barra móvil */}
         <div className="flex md:hidden border-t border-slate-100 px-4 py-2 gap-1 overflow-x-auto bg-white">
           {NAV.filter((n) => puede(n.permiso)).map((n) => (
-            <Link
+            <NavLink
               key={n.to}
               to={n.to}
-              className="flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-              activeProps={{ className: "bg-slate-100 text-slate-950 font-semibold" }}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100",
+                  isActive && "bg-slate-100 text-slate-950 font-semibold",
+                )
+              }
             >
               <n.icon className="size-3 text-slate-500" aria-hidden="true" />
               <span>{n.label}</span>
-            </Link>
+            </NavLink>
           ))}
         </div>
       </header>
 
       {/* Área de trabajo */}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        {children}
+        {children ?? <Outlet />}
       </main>
 
       {/* Footer sobrio */}
@@ -147,3 +147,5 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+export default AppLayout;

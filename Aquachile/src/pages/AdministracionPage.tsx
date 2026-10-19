@@ -1,19 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { useState } from "react";
-import {
-  ShieldAlert,
-  RotateCcw,
-  Plus,
-  Users,
-  Briefcase,
-  UserCheck,
-  CheckCircle2,
-  Server,
-  Layers,
-  Database,
-  ArrowRight,
-} from "lucide-react";
-import { AppShell } from "@/components/app-shell";
+import { ShieldAlert, RotateCcw, Plus, Server, Layers, Database, UserCheck } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { useDatos } from "@/context/data-context";
 import { Card } from "@/components/ui/card";
@@ -45,21 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { FAMILIAS, ROLES, USUARIOS, type FamiliaCargo } from "@/lib/domain";
 
-export const Route = createFileRoute("/administracion")({
-  head: () => ({
-    meta: [
-      { title: "Administración Académica | Evaluación Psicolaboral" },
-      {
-        name: "description",
-        content:
-          "Módulo del Administrador Académico para configuración de usuarios simulados, catálogos y restablecimiento de datos de prueba.",
-      },
-    ],
-  }),
-  component: Administracion,
-});
-
-export function Administracion() {
+export function AdministracionPage() {
   const { puede, rol } = useAuth();
   const {
     cargos,
@@ -89,20 +62,18 @@ export function Administracion() {
 
   if (!puede("administrar")) {
     return (
-      <AppShell>
-        <Card className="p-8 text-center max-w-xl mx-auto my-12">
-          <ShieldAlert className="size-12 text-destructive mx-auto mb-4" />
-          <h1 className="text-xl font-semibold">Acceso Restringido</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            El módulo de administración académica está reservado exclusivamente para usuarios con el
-            rol <strong>Administrador Académico</strong>. Su rol actual es{" "}
-            <strong>{rol || "no identificado"}</strong>.
-          </p>
-          <Button asChild className="mt-6">
-            <Link to="/panel">Volver al panel principal</Link>
-          </Button>
-        </Card>
-      </AppShell>
+      <Card className="p-8 text-center max-w-xl mx-auto my-12">
+        <ShieldAlert className="size-12 text-destructive mx-auto mb-4" />
+        <h1 className="text-xl font-semibold">Acceso Restringido</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          El módulo de administración académica está reservado exclusivamente para usuarios con el
+          rol <strong>Administrador Académico</strong>. Su rol actual es{" "}
+          <strong>{rol || "no identificado"}</strong>.
+        </p>
+        <Button asChild className="mt-6">
+          <Link to="/panel">Volver al panel principal</Link>
+        </Button>
+      </Card>
     );
   }
 
@@ -133,7 +104,7 @@ export function Administracion() {
   }
 
   return (
-    <AppShell>
+    <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -462,6 +433,9 @@ export function Administracion() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </div>
   );
 }
+
+export const Administracion = AdministracionPage;
+export default AdministracionPage;
