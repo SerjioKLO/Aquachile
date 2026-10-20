@@ -13,7 +13,7 @@ const NAV = [
 ];
 export function AppLayout({ children }) {
   const { rol, nombreRol, usuarioActual, listo, salir, puede } = useAuth();
-  const { backendConectado } = useDatos();
+  const { backendConectado, supabaseConectado } = useDatos();
   const navigate = useNavigate();
   useEffect(() => {
     if (listo && !rol) navigate("/", { replace: true });
@@ -60,14 +60,22 @@ export function AppLayout({ children }) {
   }
             <div
     className="hidden lg:flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600"
-    title={backendConectado ? "Conectado a la API REST Spring Boot (puerto 8080)" : "Modo Local: Datos almacenados en almacenamiento persistente"}
+    title={
+      backendConectado
+        ? "Conectado a la API REST Spring Boot (puerto 8080)"
+        : supabaseConectado
+        ? "Conectado a la base de datos Supabase en la nube"
+        : "Modo Local: Datos almacenados en almacenamiento persistente"
+    }
   >
               <span
-    className={`size-1.5 rounded-full ${backendConectado ? "bg-emerald-500" : "bg-slate-400"}`}
+    className={`size-1.5 rounded-full ${
+      backendConectado || supabaseConectado ? "bg-emerald-500" : "bg-slate-400"
+    }`}
     aria-hidden="true"
   />
               <span className="font-mono text-[10px]">
-                {backendConectado ? "API Spring Boot" : "Storage Local"}
+                {backendConectado ? "API Spring Boot" : supabaseConectado ? "Supabase Cloud" : "Storage Local"}
               </span>
             </div>
 

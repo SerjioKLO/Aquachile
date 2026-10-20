@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import {
   createContext,
   useCallback,
@@ -53,6 +54,7 @@ export function DataProvider({ children }) {
   );
   const [cargando, setCargando] = useState(false);
   const [backendConectado, setBackendConectado] = useState(null);
+  const [supabaseConectado, setSupabaseConectado] = useState(false);
   const recargarDesdeBackend = useCallback(async () => {
     setCargando(true);
     try {
@@ -78,7 +80,7 @@ export function DataProvider({ children }) {
           const cargosMapeados = catsDTO.cargos.map((cg) => ({
             id: `cg${cg.id}`,
             nombre: cg.nombre,
-            familia: cg.familiaNombre || "Operaciones / Producci\xF3n",
+            familia: cg.familiaNombre || "Operaciones / Producción",
             descripcion: cg.descripcion || "",
             activo: true
           }));
@@ -89,6 +91,40 @@ export function DataProvider({ children }) {
           const evals = catsDTO.evaluadores.map((e) => e.nombreCompleto);
           setPsicologos(evals);
           guardarStorage(STORAGE_PSICOLOGOS, evals);
+        }
+      } else {
+        // Cargar candidatos desde Supabase cuando el backend Spring Boot no está activo
+        try {
+          const { data: supaCands, error: supaErr } = await supabase
+            .from("candidato")
+            .select("*")
+            .order("id", { ascending: false });
+
+          if (!supaErr && supaCands && supaCands.length > 0) {
+            setSupabaseConectado(true);
+            const candsMapeados = supaCands.map((c) => ({
+              id: `c${c.id}`,
+              rut: c.rut,
+              nombre: c.nombre_completo,
+              correo: c.correo,
+              telefono: c.telefono,
+              cargo: c.cargo || "Sin cargo",
+              familia: c.familia || "Operaciones / Producción",
+              activo: true,
+              creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
+            }));
+
+            setCandidatos((prev) => {
+              const mapa = new Map();
+              prev.forEach((cand) => mapa.set(cand.rut, cand));
+              candsMapeados.forEach((cand) => mapa.set(cand.rut, cand));
+              const combinados = Array.from(mapa.values());
+              guardarStorage(STORAGE_CANDIDATOS, combinados);
+              return combinados;
+            });
+          }
+        } catch (supaEx) {
+          console.warn("No se pudo cargar desde Supabase:", supaEx);
         }
       }
     } catch {
@@ -103,11 +139,12 @@ export function DataProvider({ children }) {
   const guardarCandidato = useCallback(
     async (datos) => {
       let nuevoCandidato;
-      if (datos.id) {
+      if (datos.id && !datos.yaEnSupabase) {
         setCandidatos((prev) => {
-          const actualizados = prev.map(
-            (c) => c.id === datos.id ? { ...c, ...datos, id: c.id } : c
-          );
+          const existe = prev.some((c) => c.id === datos.id);
+          const actualizados = existe
+            ? prev.map((c) => (c.id === datos.id ? { ...c, ...datos, id: c.id } : c))
+            : [{ ...datos, activo: true, creado: hoyISO() }, ...prev];
           guardarStorage(STORAGE_CANDIDATOS, actualizados);
           return actualizados;
         });
@@ -122,9 +159,40 @@ export function DataProvider({ children }) {
               familiaNombre: datos.familia
             });
           } catch (err) {
-            console.warn("No se pudo sincronizar edici\xF3n con backend:", err);
+            console.warn("No se pudo sincronizar edición con backend:", err);
+          }
+        } else {
+          try {
+            const numericId = Number(String(datos.id).replace(/\D/g, ""));
+            if (numericId) {
+              await supabase
+                .from("candidato")
+                .update({
+                  rut: datos.rut,
+                  nombre_completo: datos.nombre,
+                  correo: datos.correo,
+                  telefono: datos.telefono,
+                  cargo: datos.cargo,
+                  familia: datos.familia
+                })
+                .eq("id", numericId);
+            }
+          } catch (err) {
+            console.warn("No se pudo actualizar en Supabase:", err);
           }
         }
+      } else if (datos.yaEnSupabase) {
+        nuevoCandidato = {
+          ...datos,
+          id: datos.id,
+          activo: true,
+          creado: hoyISO()
+        };
+        setCandidatos((prev) => {
+          const actualizados = [nuevoCandidato, ...prev.filter((c) => c.rut !== datos.rut)];
+          guardarStorage(STORAGE_CANDIDATOS, actualizados);
+          return actualizados;
+        });
       } else {
         const idGenerado = `c${Date.now()}`;
         nuevoCandidato = {
@@ -149,7 +217,34 @@ export function DataProvider({ children }) {
               familiaNombre: datos.familia
             });
           } catch (err) {
-            console.warn("No se pudo sincronizar creaci\xF3n con backend:", err);
+            console.warn("No se pudo sincronizar creación con backend:", err);
+          }
+        } else {
+          try {
+            const { data: ins } = await supabase
+              .from("candidato")
+              .insert([
+                {
+                  rut: datos.rut,
+                  nombre_completo: datos.nombre,
+                  correo: datos.correo,
+                  telefono: datos.telefono,
+                  cargo: datos.cargo,
+                  familia: datos.familia
+                }
+              ])
+              .select()
+              .single();
+
+            if (ins?.id) {
+              setCandidatos((prev) => {
+                const act = prev.map((c) => (c.id === idGenerado ? { ...c, id: `c${ins.id}` } : c));
+                guardarStorage(STORAGE_CANDIDATOS, act);
+                return act;
+              });
+            }
+          } catch (err) {
+            console.warn("No se pudo sincronizar creación con Supabase:", err);
           }
         }
       }
@@ -172,7 +267,16 @@ export function DataProvider({ children }) {
         try {
           await api.candidatos.eliminar(id);
         } catch (err) {
-          console.warn("No se pudo sincronizar eliminaci\xF3n con backend:", err);
+          console.warn("No se pudo sincronizar eliminación con backend:", err);
+        }
+      } else {
+        try {
+          const numericId = Number(String(id).replace(/\D/g, ""));
+          if (numericId) {
+            await supabase.from("candidato").delete().eq("id", numericId);
+          }
+        } catch (err) {
+          console.warn("No se pudo eliminar en Supabase:", err);
         }
       }
     },

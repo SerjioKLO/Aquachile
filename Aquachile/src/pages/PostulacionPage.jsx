@@ -117,18 +117,9 @@ export function PostulacionPage() {
     setCargando(true);
     setErrorEnvio(null);
     try {
-      let { error } = await supabase.from("Candidato").insert([
-        {
-          Rut: form.rut,
-          Nombre_Completo: form.nombre.trim(),
-          Correo: form.correo.trim(),
-          Telefono: form.telefono.trim(),
-          Cargo: form.cargo.trim(),
-          Familia: form.familia
-        }
-      ]);
-      if (error && (error.code === "PGRST205" || error.code === "PGRST204" || error.message?.includes("schema cache") || error.message?.includes("candidato"))) {
-        const fallbackRes = await supabase.from("candidato").insert([
+      const { data: insertado, error } = await supabase
+        .from("candidato")
+        .insert([
           {
             rut: form.rut,
             nombre_completo: form.nombre.trim(),
@@ -137,15 +128,23 @@ export function PostulacionPage() {
             cargo: form.cargo.trim(),
             familia: form.familia
           }
-        ]);
-        error = fallbackRes.error;
-      }
+        ])
+        .select()
+        .single();
+
       if (error) {
-        console.error("Error al registrar en Supabase:", error.message);
-        setErrorEnvio("Hubo un problema al registrar tu postulaci\xF3n. Int\xE9ntalo de nuevo.");
+        console.error("Error al registrar en Supabase:", error);
+        setErrorEnvio(
+          error.code === "23505"
+            ? "Ya existe una postulación registrada con ese RUT."
+            : "Hubo un problema al registrar tu postulación en la base de datos. Inténtalo de nuevo."
+        );
         return;
       }
+
       guardarCandidato({
+        id: insertado?.id ? `c${insertado.id}` : undefined,
+        yaEnSupabase: true,
         rut: form.rut,
         nombre: form.nombre.trim(),
         correo: form.correo.trim(),
