@@ -100,31 +100,37 @@ export function DataProvider({ children }) {
             .select("*")
             .order("id", { ascending: false });
 
-          if (!supaErr && supaCands && supaCands.length > 0) {
+          if (!supaErr) {
             setSupabaseConectado(true);
-            const candsMapeados = supaCands.map((c) => ({
-              id: `c${c.id}`,
-              rut: c.rut,
-              nombre: c.nombre_completo,
-              correo: c.correo,
-              telefono: c.telefono,
-              cargo: c.cargo || "Sin cargo",
-              familia: c.familia || "Operaciones / Producción",
-              activo: true,
-              creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
-            }));
+            if (supaCands && supaCands.length > 0) {
+              const candsMapeados = supaCands.map((c) => ({
+                id: `c${c.id}`,
+                rut: c.rut,
+                nombre: c.nombre_completo,
+                correo: c.correo,
+                telefono: c.telefono,
+                cargo: c.cargo || "Sin cargo",
+                familia: c.familia || "Operaciones / Producción",
+                activo: true,
+                creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
+              }));
 
-            setCandidatos((prev) => {
-              const mapa = new Map();
-              prev.forEach((cand) => mapa.set(cand.rut, cand));
-              candsMapeados.forEach((cand) => mapa.set(cand.rut, cand));
-              const combinados = Array.from(mapa.values());
-              guardarStorage(STORAGE_CANDIDATOS, combinados);
-              return combinados;
-            });
+              setCandidatos((prev) => {
+                const mapa = new Map();
+                prev.forEach((cand) => mapa.set(cand.rut, cand));
+                candsMapeados.forEach((cand) => mapa.set(cand.rut, cand));
+                const combinados = Array.from(mapa.values());
+                guardarStorage(STORAGE_CANDIDATOS, combinados);
+                return combinados;
+              });
+            }
+          } else {
+            console.warn("No se pudo conectar a Supabase:", supaErr);
+            setSupabaseConectado(false);
           }
         } catch (supaEx) {
           console.warn("No se pudo cargar desde Supabase:", supaEx);
+          setSupabaseConectado(false);
         }
       }
     } catch {
@@ -394,6 +400,7 @@ export function DataProvider({ children }) {
       psicologos,
       cargando,
       backendConectado,
+      supabaseConectado,
       guardarCandidato,
       eliminarCandidato,
       crearSolicitud,
@@ -412,6 +419,7 @@ export function DataProvider({ children }) {
       psicologos,
       cargando,
       backendConectado,
+      supabaseConectado,
       guardarCandidato,
       eliminarCandidato,
       crearSolicitud,

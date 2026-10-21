@@ -39,6 +39,7 @@ export function AdministracionPage() {
     candidatos,
     solicitudes,
     backendConectado,
+    supabaseConectado,
     restablecerDatosPrueba,
     agregarCargo,
     agregarPsicologo,
@@ -136,14 +137,22 @@ export function AdministracionPage() {
           <div>
             <p className="text-xs text-muted-foreground">Persistencia & Conexión</p>
             <p className="text-base font-semibold mt-1">
-              {backendConectado ? "API Spring Boot (MySQL)" : "Local Storage Persistente"}
+              {backendConectado
+                ? "API Spring Boot (MySQL)"
+                : supabaseConectado
+                ? "Supabase Cloud (PostgreSQL)"
+                : "Local Storage Persistente"}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {backendConectado ? "Sincronizado con puerto 8080" : "Persistente ante F5 y recargas"}
+              {backendConectado
+                ? "Sincronizado con puerto 8080"
+                : supabaseConectado
+                ? "Sincronizado con Supabase Cloud"
+                : "Persistente ante F5 y recargas"}
             </p>
           </div>
           <div
-    className={`flex size-10 items-center justify-center rounded-full ${backendConectado ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+    className={`flex size-10 items-center justify-center rounded-full ${backendConectado || supabaseConectado ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
   >
             <Server className="size-5" />
           </div>
