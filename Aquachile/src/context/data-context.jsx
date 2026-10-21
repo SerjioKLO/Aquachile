@@ -17,10 +17,19 @@ import {
 import { api, toFrontendCandidato, toFrontendSolicitud } from "@/services/api";
 import { toast } from "sonner";
 const DataContext = createContext(null);
-const STORAGE_CANDIDATOS = "aquachile_candidatos_v2";
-const STORAGE_SOLICITUDES = "aquachile_solicitudes_v2";
-const STORAGE_CARGOS = "aquachile_cargos_v2";
-const STORAGE_PSICOLOGOS = "aquachile_psicologos_v2";
+const STORAGE_CANDIDATOS = "aquachile_candidatos_v3";
+const STORAGE_SOLICITUDES = "aquachile_solicitudes_v3";
+const STORAGE_CARGOS = "aquachile_cargos_v3";
+const STORAGE_PSICOLOGOS = "aquachile_psicologos_v3";
+
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("aquachile_candidatos_v2");
+    localStorage.removeItem("aquachile_solicitudes_v2");
+    localStorage.removeItem("aquachile_candidatos");
+    localStorage.removeItem("aquachile_solicitudes");
+  } catch {}
+}
 const hoyISO = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
 function leerStorage(key, fallback) {
   if (typeof window === "undefined") return fallback;
@@ -102,28 +111,20 @@ export function DataProvider({ children }) {
 
           if (!supaErr) {
             setSupabaseConectado(true);
-            if (supaCands && supaCands.length > 0) {
-              const candsMapeados = supaCands.map((c) => ({
-                id: `c${c.id}`,
-                rut: c.rut,
-                nombre: c.nombre_completo,
-                correo: c.correo,
-                telefono: c.telefono,
-                cargo: c.cargo || "Sin cargo",
-                familia: c.familia || "Operaciones / Producción",
-                activo: true,
-                creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
-              }));
+            const candsMapeados = (supaCands || []).map((c) => ({
+              id: `c${c.id}`,
+              rut: c.rut,
+              nombre: c.nombre_completo,
+              correo: c.correo,
+              telefono: c.telefono,
+              cargo: c.cargo || "Sin cargo",
+              familia: c.familia || "Operaciones / Producción",
+              activo: true,
+              creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
+            }));
 
-              setCandidatos((prev) => {
-                const mapa = new Map();
-                prev.forEach((cand) => mapa.set(cand.rut, cand));
-                candsMapeados.forEach((cand) => mapa.set(cand.rut, cand));
-                const combinados = Array.from(mapa.values());
-                guardarStorage(STORAGE_CANDIDATOS, combinados);
-                return combinados;
-              });
-            }
+            setCandidatos(candsMapeados);
+            guardarStorage(STORAGE_CANDIDATOS, candsMapeados);
           } else {
             console.warn("No se pudo conectar a Supabase:", supaErr);
             setSupabaseConectado(false);
@@ -359,15 +360,15 @@ export function DataProvider({ children }) {
     [backendConectado]
   );
   const restablecerDatosPrueba = useCallback(() => {
-    setCandidatos(CANDIDATOS_INICIALES);
-    setSolicitudes(SOLICITUDES_INICIALES);
+    setCandidatos([]);
+    setSolicitudes([]);
     setCargos(CARGOS_INICIALES);
     setPsicologos(PSICOLOGOS);
-    guardarStorage(STORAGE_CANDIDATOS, CANDIDATOS_INICIALES);
-    guardarStorage(STORAGE_SOLICITUDES, SOLICITUDES_INICIALES);
+    guardarStorage(STORAGE_CANDIDATOS, []);
+    guardarStorage(STORAGE_SOLICITUDES, []);
     guardarStorage(STORAGE_CARGOS, CARGOS_INICIALES);
     guardarStorage(STORAGE_PSICOLOGOS, PSICOLOGOS);
-    toast.success("Datos de prueba restablecidos al estado inicial del caso AquaChile.");
+    toast.success("Registros restablecidos al estado inicial.");
   }, []);
   const agregarCargo = useCallback((nuevo) => {
     const item = {

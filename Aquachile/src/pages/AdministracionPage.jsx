@@ -102,8 +102,7 @@ export function AdministracionPage() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Administración del Sistema</h1>
           <p className="text-sm text-muted-foreground">
-            Gestione usuarios ficticios, catálogos institucionales y restablezca los datos del caso
-            de prueba AquaChile.
+            Gestione credenciales de acceso, catálogos institucionales y registros del sistema AquaChile.
           </p>
         </div>
 
@@ -115,7 +114,7 @@ export function AdministracionPage() {
     className="gap-2"
   >
             <Database className="size-4" />
-            Sincronizar API
+            Sincronizar
           </Button>
           <Button
     variant="destructive"
@@ -124,7 +123,7 @@ export function AdministracionPage() {
     className="gap-2"
   >
             <RotateCcw className="size-4" />
-            Restablecer datos de prueba
+            Restablecer registros
           </Button>
         </div>
       </div>
@@ -165,7 +164,7 @@ export function AdministracionPage() {
               {candidatos.length} Candidatos · {solicitudes.length} Solicitudes
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Semilla base: 12 candidatos y 10 solicitudes
+              Registros activos en la plataforma
             </p>
           </div>
           <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -415,11 +414,10 @@ export function AdministracionPage() {
       <Dialog open={dialogoReset} onOpenChange={setDialogoReset}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>¿Restablecer datos de prueba iniciales?</DialogTitle>
+            <DialogTitle>¿Restablecer registros locales?</DialogTitle>
             <DialogDescription>
-              Esta acción reiniciará los candidatos y solicitudes al estado semilla del caso
-              académico (12 candidatos y 10 solicitudes de prueba), permitiendo una demostración
-              limpia ante evaluadores.
+              Esta acción limpiará los registros de candidatos y solicitudes guardados localmente
+              y restablecerá los catálogos del sistema.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
