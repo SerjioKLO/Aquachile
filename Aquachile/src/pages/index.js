@@ -5,3 +5,5 @@ export { CandidatosPage, Candidatos } from "./CandidatosPage";
 export { SolicitudesPage, Solicitudes } from "./SolicitudesPage";
 export { DetalleSolicitudPage, Detalle } from "./DetalleSolicitudPage";
 export { AdministracionPage, Administracion } from "./AdministracionPage";
+export { NotFoundPage } from "./NotFoundPage";
+
