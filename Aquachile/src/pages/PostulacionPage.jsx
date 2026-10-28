@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+﻿import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -21,6 +21,7 @@ import { cargarCatalogoSupabase, resolverCargoParaCandidato } from "@/lib/supaba
 import { useEffect } from "react";
 import { useDatos } from "@/context/data-context";
 import { Input } from "@/components/ui/input";
+import { PhoneInput, validarTelefonoCompleto } from "@/components/phone-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,9 +115,8 @@ export function PostulacionPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.correo.trim())) {
       e.correo = "Ingrese una direcci\xF3n de correo electr\xF3nico v\xE1lida.";
     }
-    if (!/^\d{8,12}$/.test(form.telefono.replace(/\D/g, ""))) {
-      e.telefono = "Ingrese un tel\xE9fono de contacto v\xE1lido (ej: +56 9 1234 5678).";
-    }
+    const telefonoError = validarTelefonoCompleto(form.telefono);
+    if (telefonoError) { e.telefono = telefonoError; }
     if (!form.familia) {
       e.familia = "Seleccione el \xE1rea del cargo.";
     }
@@ -392,16 +392,14 @@ export function PostulacionPage() {
                         <Label htmlFor="telefono" className="text-xs font-medium text-slate-700">
                           Teléfono de contacto <span className="text-rose-600">*</span>
                         </Label>
-                        <Input
+                        <PhoneInput
     id="telefono"
     name="telefono"
-    type="tel"
-    autoComplete="tel"
-    placeholder="+56 9 1234 5678"
     value={form.telefono}
-    onChange={(e) => setCampo("telefono", e.target.value)}
-    aria-invalid={!!errores.telefono}
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+    onChange={(val) => setCampo("telefono", val)}
+    disabled={false}
+    error={!!errores.telefono}
+    className="bg-white border-slate-300 focus-visible:ring-slate-950 focus-visible:border-slate-950"
   />
                         {errores.telefono && <p className="text-xs text-rose-600">{errores.telefono}</p>}
                       </div>
