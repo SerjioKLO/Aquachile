@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import fondoImg from "@/assets/fondo.jpg";
 import { FAMILIAS } from "@/lib/domain";
+import { CargoCombobox } from "@/components/cargo-combobox";
+import { cargarCatalogoSupabase, resolverCargoParaCandidato } from "@/lib/supabase-db";
+import { useEffect } from "react";
 import { useDatos } from "@/context/data-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +49,21 @@ function formatearRut(valor) {
 export function PostulacionPage() {
   const { guardarCandidato } = useDatos();
   const [form, setForm] = useState(formVacio);
+  const [catalogo, setCatalogo] = useState({
+    familias: FAMILIAS,
+    cargosPorFamilia: {}
+  });
+
+  useEffect(() => {
+    cargarCatalogoSupabase().then((res) => {
+      if (res && res.familias?.length > 0) {
+        setCatalogo({
+          familias: res.familias,
+          cargosPorFamilia: res.cargosPorFamilia
+        });
+      }
+    });
+  }, []);
   const [cvArchivo, setCvArchivo] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [errores, setErrores] = useState({});
@@ -116,8 +134,16 @@ export function PostulacionPage() {
     if (!validar()) return;
     setCargando(true);
     setErrorEnvio(null);
+
+    let insertado = null;
+    let guardadoEnNube = false;
+
     try {
-      const { data: insertado, error } = await supabase
+      // 1. Intentar resolver claves foráneas en la base de datos
+      const cargoResuelto = await resolverCargoParaCandidato(form.familia, form.cargo);
+
+      // 2. Insertar en tabla public.candidato
+      const { data, error } = await supabase
         .from("candidato")
         .insert([
           {
@@ -125,49 +151,75 @@ export function PostulacionPage() {
             nombre_completo: form.nombre.trim(),
             correo: form.correo.trim(),
             telefono: form.telefono.trim(),
-            cargo: form.cargo.trim(),
-            familia: form.familia
+            familia_id: cargoResuelto.familia_id,
+            cargo_id: cargoResuelto.cargo_id,
+            cargo_personalizado: cargoResuelto.cargo_personalizado
           }
         ])
         .select()
         .single();
 
       if (error) {
-        console.error("Error al registrar en Supabase:", error);
-        setErrorEnvio(
-          error.code === "23505"
-            ? "Ya existe una postulación registrada con ese RUT."
-            : "Hubo un problema al registrar tu postulación en la base de datos. Inténtalo de nuevo."
-        );
-        return;
+        if (error.code === "23505") {
+          setErrorEnvio("Ya existe una postulación registrada con ese RUT en el sistema.");
+          setCargando(false);
+          return;
+        } else if (error.code === "42501") {
+          console.warn("RLS bloqueó la inserción en Supabase:", error);
+          setErrorEnvio(
+            "Permiso denegado por Row Level Security (RLS) en Supabase. Asegúrate de ejecutar el script 'supabase_poblacion.sql' en el SQL Editor de Supabase para activar las políticas de acceso."
+          );
+          setCargando(false);
+          return;
+        } else {
+          throw error;
+        }
       }
 
-      guardarCandidato({
-        id: insertado?.id ? `c${insertado.id}` : undefined,
-        yaEnSupabase: true,
-        rut: form.rut,
-        nombre: form.nombre.trim(),
-        correo: form.correo.trim(),
-        telefono: form.telefono.trim(),
-        cargo: form.cargo.trim(),
-        familia: form.familia
-      });
-      setEnviado({
-        nombre: form.nombre.trim(),
-        cargo: form.cargo.trim(),
-        rut: form.rut,
-        fecha: (/* @__PURE__ */ new Date()).toLocaleDateString("es-CL", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric"
-        })
-      });
+      insertado = data;
+      guardadoEnNube = true;
     } catch (err) {
-      console.error("Error de conexi\xF3n:", err);
-      setErrorEnvio("Error de conexi\xF3n con el servidor. Verifica tu conexi\xF3n a internet.");
-    } finally {
-      setCargando(false);
+      console.warn("Fallo al guardar en Supabase Cloud:", err);
+      const msg = err?.message || "";
+
+      if (msg.includes("no existe en la base de datos") || msg.includes("familia")) {
+        setErrorEnvio(
+          "Las tablas de Supabase aún no han sido pobladas. Por favor ejecuta el script 'supabase_poblacion.sql' en el SQL Editor de tu proyecto de Supabase para cargar el catálogo de familias/cargos y habilitar los permisos."
+        );
+        setCargando(false);
+        return;
+      } else {
+        setErrorEnvio(
+          err?.message || "Hubo un problema al registrar tu postulación en la base de datos. Inténtalo de nuevo."
+        );
+        setCargando(false);
+        return;
+      }
     }
+
+    // 3. Registrar en el contexto y mostrar pantalla de éxito
+    guardarCandidato({
+      id: insertado?.id ? `c${insertado.id}` : undefined,
+      yaEnSupabase: guardadoEnNube,
+      rut: form.rut,
+      nombre: form.nombre.trim(),
+      correo: form.correo.trim(),
+      telefono: form.telefono.trim(),
+      cargo: form.cargo.trim(),
+      familia: form.familia
+    });
+
+    setEnviado({
+      nombre: form.nombre.trim(),
+      cargo: form.cargo.trim(),
+      rut: form.rut,
+      fecha: new Date().toLocaleDateString("es-CL", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      })
+    });
+    setCargando(false);
   }
   function handleReset() {
     setForm(formVacio);
@@ -392,7 +444,16 @@ export function PostulacionPage() {
                         </Label>
                         <Select
     value={form.familia}
-    onValueChange={(val) => setCampo("familia", val)}
+    onValueChange={(val) => {
+                          setForm((prev) => ({ ...prev, familia: val, cargo: "" }));
+                          if (errores.familia) {
+                            setErrores((prev) => {
+                              const n = { ...prev };
+                              delete n.familia;
+                              return n;
+                            });
+                          }
+                        }}
   >
                           <SelectTrigger
     id="familia"
@@ -402,7 +463,7 @@ export function PostulacionPage() {
                             <SelectValue placeholder="Selecciona un área" />
                           </SelectTrigger>
                           <SelectContent className="bg-white border-slate-200">
-                            {FAMILIAS.map((fam) => <SelectItem key={fam} value={fam} className="text-slate-800">
+                            {(catalogo.familias || FAMILIAS).map((fam) => <SelectItem key={fam} value={fam} className="text-slate-800">
                                 {fam}
                               </SelectItem>)}
                           </SelectContent>
@@ -414,16 +475,23 @@ export function PostulacionPage() {
                         <Label htmlFor="cargo" className="text-xs font-medium text-slate-700">
                           Cargo específico <span className="text-rose-600">*</span>
                         </Label>
-                        <Input
-    id="cargo"
-    name="cargo"
-    autoComplete="off"
-    placeholder="Ej: Asistente de Operaciones"
-    value={form.cargo}
-    onChange={(e) => setCampo("cargo", e.target.value)}
-    aria-invalid={!!errores.cargo}
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
+                        <CargoCombobox
+                          id="cargo"
+                          name="cargo"
+                          familia={form.familia}
+                          value={form.cargo}
+                          onChange={(val) => {
+                            setCampo("cargo", val);
+                            if (errores.cargo && val.trim().length >= 3) {
+                              setErrores((prev) => {
+                                const n = { ...prev };
+                                delete n.cargo;
+                                return n;
+                              });
+                            }
+                          }}
+                          error={errores.cargo}
+                        />
                         {errores.cargo && <p className="text-xs text-rose-600">{errores.cargo}</p>}
                       </div>
                     </div>

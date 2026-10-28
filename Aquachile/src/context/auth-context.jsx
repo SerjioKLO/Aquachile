@@ -22,7 +22,6 @@ export function AuthProvider({ children }) {
           try {
             setUsuarioActual(JSON.parse(guardadoUser));
           } catch {
-            // Si falla el parseo, se busca en la lista fallback
             const uFallback = USUARIOS.find((u) => u.rol === guardadoRol) ?? null;
             setUsuarioActual(uFallback);
           }
@@ -36,71 +35,68 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const ingresar = useCallback(async (identificador, clave) => {
-    const input = (identificador || "").trim().toLowerCase();
-    const pass = (clave || "").trim();
+  /**
+   * Inicio de sesión únicamente mediante correo electrónico,
+   * comprobando que el correo exista en la tabla public.usuario de Supabase.
+   */
+  const ingresar = useCallback(async (correoIngresado) => {
+    const input = (correoIngresado || "").trim().toLowerCase();
 
-    if (!input || !pass) {
-      return { ok: false, error: "Ingresa tu usuario/correo y contraseña." };
+    if (!input) {
+      return { ok: false, error: "Por favor ingresa tu correo electrónico." };
     }
 
-    // 1. Intentar autenticar contra la base de datos Supabase
+    // Normalizar si ingresó un alias directo como "analista" -> "analista@aquachile.cl"
+    const emailNormalizado = input.includes("@") ? input : `${input}@aquachile.cl`;
+
+    // 1. Comprobar que el correo se encuentre registrado en la tabla public.usuario de Supabase
     try {
-      const { data: usuarios, error } = await supabase
+      const { data: usuario, error } = await supabase
         .from("usuario")
         .select(`
           id,
           nombre_completo,
           correo,
-          password,
           rol_id,
           rol:rol_id (
             id,
             nombre,
             descripcion
           )
-        `);
+        `)
+        .ilike("correo", emailNormalizado)
+        .maybeSingle();
 
-      if (!error && usuarios && usuarios.length > 0) {
-        const encontrado = usuarios.find((u) => {
-          const correo = (u.correo || "").toLowerCase();
-          const prefix = correo.split("@")[0];
-          const coincideUser =
-            correo === input ||
-            prefix === input ||
-            correo.startsWith(`${input}@`);
-          return coincideUser && String(u.password).trim() === pass;
-        });
+      if (!error && usuario) {
+        const rolKey = (usuario.rol?.nombre || "").toLowerCase();
+        const rolValido = rolKey in PERMISOS_POR_ROL ? rolKey : "analista";
+        const usuarioData = {
+          id: usuario.id,
+          nombre: usuario.nombre_completo,
+          nombre_completo: usuario.nombre_completo,
+          correo: usuario.correo,
+          rol: rolValido,
+          rolId: usuario.rol_id,
+          rolDescripcion: usuario.rol?.descripcion || ""
+        };
 
-        if (encontrado) {
-          const rolKey = (encontrado.rol?.nombre || "").toLowerCase();
-          const rolValido = rolKey in PERMISOS_POR_ROL ? rolKey : "analista";
-          const usuarioData = {
-            id: encontrado.id,
-            nombre: encontrado.nombre_completo,
-            nombre_completo: encontrado.nombre_completo,
-            correo: encontrado.correo,
-            rol: rolValido,
-            rolId: encontrado.rol_id
-          };
-
-          localStorage.setItem(STORAGE_KEY, rolValido);
-          localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(usuarioData));
-          setRol(rolValido);
-          setUsuarioActual(usuarioData);
-          return { ok: true, usuario: usuarioData };
-        }
+        localStorage.setItem(STORAGE_KEY, rolValido);
+        localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(usuarioData));
+        setRol(rolValido);
+        setUsuarioActual(usuarioData);
+        return { ok: true, usuario: usuarioData };
       }
     } catch (err) {
-      console.warn("No se pudo conectar a Supabase para login, intentando fallback:", err);
+      console.warn("No se pudo conectar a Supabase para verificar el correo:", err);
     }
 
-    // 2. Fallback de seguridad en caso de fallo de red
+    // 2. Fallback de contingencia (en caso de pérdida temporal de conexión a Supabase)
     const encontradoLocal = USUARIOS.find((u) => {
-      const match =
-        u.usuario.toLowerCase() === input ||
-        `${u.usuario.toLowerCase()}@aquachile.cl` === input;
-      return match && u.clave === pass;
+      const uCorreo = `${u.usuario.toLowerCase()}@aquachile.cl`;
+      return (
+        uCorreo === emailNormalizado ||
+        u.usuario.toLowerCase() === input
+      );
     });
 
     if (encontradoLocal) {
@@ -119,7 +115,7 @@ export function AuthProvider({ children }) {
 
     return {
       ok: false,
-      error: "Credenciales incorrectas. Verifica tu usuario o correo y contraseña."
+      error: "El correo ingresado no se encuentra registrado en la base de datos."
     };
   }, []);
 
@@ -156,3 +152,4 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth debe usarse dentro de AuthProvider");
   return ctx;
 }
+export default AuthContext;

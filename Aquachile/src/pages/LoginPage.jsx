@@ -2,32 +2,35 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LogIn,
-  Eye,
-  EyeOff,
-  User,
-  Lock,
+  Mail,
   Loader2,
   ShieldAlert,
-  Database
+  Database,
+  ArrowRight
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
+const CUENTAS_SUGERIDAS = [
+  { rol: "Analista", email: "analista@aquachile.cl" },
+  { rol: "Evaluador", email: "evaluador@aquachile.cl" },
+  { rol: "Administrador", email: "admin@aquachile.cl" },
+  { rol: "Jefatura", email: "jefatura@aquachile.cl" }
+];
+
 export function LoginPage() {
   const { ingresar } = useAuth();
   const navigate = useNavigate();
-  const [usuario, setUsuario] = useState("");
-  const [clave, setClave] = useState("");
-  const [mostrarClave, setMostrarClave] = useState(false);
+  const [correo, setCorreo] = useState("");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(ev) {
     ev.preventDefault();
-    if (!usuario.trim() || !clave.trim()) {
-      setError("Por favor ingresa tu usuario o correo y contraseña.");
+    if (!correo.trim()) {
+      setError("Por favor ingresa tu correo electrónico.");
       return;
     }
 
@@ -35,17 +38,22 @@ export function LoginPage() {
     setError("");
 
     try {
-      const res = await ingresar(usuario, clave);
+      const res = await ingresar(correo);
       if (res && res.ok) {
         navigate("/panel", { replace: true });
       } else {
-        setError(res?.error || "Credenciales incorrectas. Verifica tus datos de acceso.");
+        setError(res?.error || "El correo no se encuentra registrado en la base de datos.");
       }
     } catch {
-      setError("Error al comunicarse con el servicio de autenticación. Inténtalo nuevamente.");
+      setError("Error al comunicarse con la base de datos. Inténtalo nuevamente.");
     } finally {
       setCargando(false);
     }
+  }
+
+  function seleccionarSugerido(email) {
+    setCorreo(email);
+    setError("");
   }
 
   return (
@@ -72,80 +80,39 @@ export function LoginPage() {
           {/* Tarjeta de Inicio de Sesión */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
             <div className="text-center space-y-2">
-
               <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">
                 Ingreso al Sistema
               </h1>
               <p className="text-xs text-slate-500">
-                Plataforma de evaluación y selección de candidatos
+                Acceso exclusivo para evaluadores y personal autorizado mediante correo registrado
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="usuario" className="text-xs font-medium text-slate-700">
-                  Usuario o Correo Institucional
+                <Label htmlFor="correo" className="text-xs font-medium text-slate-700">
+                  Correo Electrónico Institucional
                 </Label>
                 <div className="relative">
-                  <User
+                  <Mail
                     className="absolute left-3 top-2.5 size-4 text-slate-400"
                     aria-hidden="true"
                   />
                   <Input
-                    id="usuario"
-                    name="usuario"
-                    type="text"
-                    autoComplete="username"
+                    id="correo"
+                    name="correo"
+                    type="email"
+                    autoComplete="email"
                     spellCheck={false}
                     disabled={cargando}
-                    placeholder="ej: analista@aquachile.cl o analista"
-                    value={usuario}
+                    placeholder="ej: analista@aquachile.cl"
+                    value={correo}
                     onChange={(e) => {
-                      setUsuario(e.target.value);
+                      setCorreo(e.target.value);
                       setError("");
                     }}
-                    className="bg-white border-slate-300 text-slate-900 text-xs h-9 pl-9 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                    className="bg-white border-slate-300 text-slate-900 text-xs h-10 pl-9 focus-visible:ring-slate-950 focus-visible:border-slate-950"
                   />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="clave" className="text-xs font-medium text-slate-700">
-                    Contraseña
-                  </Label>
-                </div>
-                <div className="relative">
-                  <Lock
-                    className="absolute left-3 top-2.5 size-4 text-slate-400"
-                    aria-hidden="true"
-                  />
-                  <Input
-                    id="clave"
-                    name="clave"
-                    type={mostrarClave ? "text" : "password"}
-                    autoComplete="current-password"
-                    disabled={cargando}
-                    placeholder="••••••••"
-                    value={clave}
-                    onChange={(e) => {
-                      setClave(e.target.value);
-                      setError("");
-                    }}
-                    className="bg-white border-slate-300 text-slate-900 text-xs h-9 pl-9 pr-9 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMostrarClave(!mostrarClave)}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 transition-colors"
-                    aria-label={mostrarClave ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  >
-                    {mostrarClave ? (
-                      <EyeOff className="size-4" aria-hidden="true" />
-                    ) : (
-                      <Eye className="size-4" aria-hidden="true" />
-                    )}
-                  </button>
                 </div>
               </div>
 
@@ -162,25 +129,45 @@ export function LoginPage() {
               <Button
                 type="submit"
                 disabled={cargando}
-                className="w-full h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors gap-2"
+                className="w-full h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors gap-2 cursor-pointer"
               >
                 {cargando ? (
                   <>
                     <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                    <span>Verificando credenciales…</span>
+                    <span>Verificando correo en la base de datos…</span>
                   </>
                 ) : (
                   <>
                     <LogIn className="size-3.5" aria-hidden="true" />
-                    <span>Iniciar sesión</span>
+                    <span>Ingresar al Sistema</span>
                   </>
                 )}
               </Button>
             </form>
 
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+            {/* Accesos rápidos sugeridos */}
+            <div className="pt-2 space-y-2 border-t border-slate-100">
+              <p className="text-[11px] font-medium text-slate-600">
+                Cuentas registradas en la base de datos:
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {CUENTAS_SUGERIDAS.map((c) => (
+                  <button
+                    key={c.email}
+                    type="button"
+                    onClick={() => seleccionarSugerido(c.email)}
+                    className="flex flex-col items-start p-2 rounded-md border border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-left transition-colors"
+                  >
+                    <span className="text-[10px] font-semibold text-slate-700">{c.rol}</span>
+                    <span className="text-[10px] text-slate-500 truncate w-full">{c.email}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-1 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
               <Database className="size-3 text-slate-400" aria-hidden="true" />
-              <span>Autenticación validada con base de datos Supabase</span>
+              <span>Verificación en tiempo real contra Supabase</span>
             </div>
           </div>
         </div>
