@@ -4,7 +4,10 @@
   "scripts": {
     "dev": "npm --prefix Aquachile run dev",
     "build": "npm --prefix Aquachile run build",
-    "preview": "npm --prefix Aquachile run preview"
+    "preview": "npm --prefix Aquachile run preview",
+    "test": "npm --prefix Aquachile run test:run",
+    "test:watch": "npm --prefix Aquachile run test",
+    "test:coverage": "npm --prefix Aquachile run test:coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0"
