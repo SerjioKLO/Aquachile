@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -17,6 +17,7 @@ import {
 import fondoImg from "@/assets/fondo.jpg";
 import { FAMILIAS } from "@/lib/domain";
 import { CargoCombobox } from "@/components/cargo-combobox";
+import { enviarConfirmacionPostulacion } from "@/services/resendService";
 import { cargarCatalogoSupabase, resolverCargoParaCandidato } from "@/lib/supabase-db";
 import { useEffect } from "react";
 import { useDatos } from "@/context/data-context";
@@ -197,7 +198,22 @@ export function PostulacionPage() {
       }
     }
 
-    // 3. Registrar en el contexto y mostrar pantalla de éxito
+    // 3. Enviar correo de confirmación al candidato mediante el servicio de correo
+    const fechaFormateada = new Date().toLocaleDateString("es-CL", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric"
+    });
+    enviarConfirmacionPostulacion({
+      nombre: form.nombre.trim(),
+      rut: form.rut,
+      cargo: form.cargo.trim(),
+      familia: form.familia,
+      correo: form.correo.trim(),
+      fecha: fechaFormateada
+    });
+
+    // 4. Registrar en el contexto y mostrar pantalla de éxito
     guardarCandidato({
       id: insertado?.id ? `c${insertado.id}` : undefined,
       yaEnSupabase: guardadoEnNube,

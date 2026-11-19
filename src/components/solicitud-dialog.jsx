@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PSICOLOGOS } from "@/lib/domain";
 import { useDatos } from "@/context/data-context";
+import { enviarCitacionEntrevista } from "@/services/resendService";
 import { toast } from "sonner";
 export function SolicitudDialog({ open, onOpenChange }) {
   const { candidatos, crearSolicitud, psicologos: listaPsicologos } = useDatos();
@@ -46,15 +47,30 @@ export function SolicitudDialog({ open, onOpenChange }) {
     if (!fecha) e["fecha"] = "Indique la fecha de solicitud.";
     setErrores(e);
     if (Object.keys(e).length || !candidato) return;
+    const cargoFinal = cargo.trim() || candidato.cargo;
     crearSolicitud({
       candidatoId,
-      cargo: cargo.trim() || candidato.cargo,
+      cargo: cargoFinal,
       familia: candidato.familia,
       psicologo,
       prioridad,
       fechaSolicitud: fecha
     });
-    toast.success("Solicitud de evaluaci\xF3n creada");
+
+    // Enviar correo de citación al candidato con la fecha fijada por el analista
+    if (candidato.correo) {
+      enviarCitacionEntrevista({
+        nombre: candidato.nombre,
+        rut: candidato.rut,
+        correo: candidato.correo,
+        cargo: cargoFinal,
+        familia: candidato.familia,
+        psicologo,
+        fechaEntrevista: fecha
+      });
+    }
+
+    toast.success("Solicitud de evaluación creada y citación enviada");
     onOpenChange(false);
   }
   return <Dialog open={open} onOpenChange={onOpenChange}>
@@ -127,7 +143,7 @@ export function SolicitudDialog({ open, onOpenChange }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="fecha">Fecha de solicitud</Label>
+            <Label htmlFor="fecha">Fecha de la entrevista</Label>
             <Input
     id="fecha"
     type="date"
