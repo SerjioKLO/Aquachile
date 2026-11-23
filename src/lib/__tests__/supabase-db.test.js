@@ -5,7 +5,9 @@ import {
   cargarEvaluadoresSupabase,
   subirCurriculum,
   obtenerUrlCurriculum,
+  eliminarArchivosCurriculum,
   crearSolicitudEvaluacion,
+  analizarCurriculumConIA,
 } from "../supabase-db";
 import { supabase } from "@/lib/supabase";
 
@@ -14,6 +16,9 @@ vi.mock("@/lib/supabase", () => ({
     from: vi.fn(),
     storage: {
       from: vi.fn(),
+    },
+    functions: {
+      invoke: vi.fn(),
     },
   },
 }));
@@ -229,6 +234,46 @@ describe("supabase-db.js - Integración con Supabase", () => {
     });
   });
 
+  describe("eliminarArchivosCurriculum", () => {
+    it("debe retornar ok: true si no se entregan paths", async () => {
+      const res1 = await eliminarArchivosCurriculum(null);
+      const res2 = await eliminarArchivosCurriculum([]);
+      expect(res1.ok).toBe(true);
+      expect(res2.ok).toBe(true);
+      expect(supabase.storage.from).not.toHaveBeenCalled();
+    });
+
+    it("debe invocar supabase.storage.from('curriculums').remove con las rutas sanitizadas", async () => {
+      const mockRemove = vi.fn().mockResolvedValue({
+        data: [{ name: "123_cv.pdf" }],
+        error: null,
+      });
+
+      supabase.storage.from.mockReturnValue({
+        remove: mockRemove,
+      });
+
+      const res = await eliminarArchivosCurriculum([" 123456789/123_cv.pdf ", "otro/cv.docx"]);
+
+      expect(supabase.storage.from).toHaveBeenCalledWith("curriculums");
+      expect(mockRemove).toHaveBeenCalledWith(["123456789/123_cv.pdf", "otro/cv.docx"]);
+      expect(res.ok).toBe(true);
+    });
+
+    it("debe manejar errores de Storage sin lanzar excepción, retornando ok: false y registrando warning", async () => {
+      supabase.storage.from.mockReturnValue({
+        remove: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Fallo de red al eliminar"),
+        }),
+      });
+
+      const res = await eliminarArchivosCurriculum("123456789/123_cv.pdf");
+      expect(res.ok).toBe(false);
+      expect(res.error).toBeDefined();
+    });
+  });
+
   describe("crearSolicitudEvaluacion", () => {
     it("debe insertar una solicitud con curriculum_path y curriculum_nombre", async () => {
       const mockInsert = vi.fn().mockReturnValue({
@@ -266,6 +311,67 @@ describe("supabase-db.js - Integración con Supabase", () => {
         },
       ]);
       expect(res.id).toBe(99);
+    });
+  });
+
+  describe("analizarCurriculumConIA", () => {
+    it("debe lanzar error si no se proporciona solicitudId", async () => {
+      await expect(analizarCurriculumConIA(null)).rejects.toThrow(
+        "Se requiere el identificador de la solicitud para el análisis con IA."
+      );
+    });
+
+    it("debe invocar la Edge Function 'analizar-cv' y retornar el análisis con fecha", async () => {
+      const mockAnalisis = {
+        puntaje_afinidad: 88,
+        nivel_ajuste: "Alto",
+        resumen_ejecutivo: ["Candidato con perfil sólido"],
+        fortalezas_cargo: ["Experiencia comprobada"],
+        brechas_detectadas: [],
+        alertas_tempranas: [],
+        preguntas_sugeridas: ["¿Cuál es su experiencia en salmones?"],
+      };
+
+      supabase.functions.invoke.mockResolvedValueOnce({
+        data: {
+          ok: true,
+          analisis: mockAnalisis,
+          fecha: "2026-11-23T01:00:00.000Z",
+        },
+        error: null,
+      });
+
+      const resultado = await analizarCurriculumConIA("s10");
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith("analizar-cv", {
+        body: { solicitudId: 10 },
+      });
+      expect(resultado).toEqual({
+        analisis: mockAnalisis,
+        fecha: "2026-11-23T01:00:00.000Z",
+      });
+    });
+
+    it("debe lanzar error descriptivo si invoke reporta un fallo", async () => {
+      supabase.functions.invoke.mockResolvedValueOnce({
+        data: null,
+        error: new Error("Fallo en Edge Function"),
+      });
+
+      await expect(analizarCurriculumConIA(10)).rejects.toThrow("Fallo en Edge Function");
+    });
+
+    it("debe propagar el mensaje de error si el cuerpo de respuesta contiene data.error", async () => {
+      supabase.functions.invoke.mockResolvedValueOnce({
+        data: {
+          error: "El archivo no contiene texto legible (posiblemente sea una imagen escaneada sin OCR).",
+        },
+        error: null,
+      });
+
+      await expect(analizarCurriculumConIA(10)).rejects.toThrow(
+        "El archivo no contiene texto legible"
+      );
     });
   });
 });

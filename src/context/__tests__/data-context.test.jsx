@@ -41,6 +41,7 @@ vi.mock("@/lib/supabase-db", () => ({
     cargo_id: null,
     cargo_personalizado: "Operador Logístico",
   }),
+  eliminarArchivosCurriculum: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock("@/services/api", () => ({
@@ -112,10 +113,11 @@ describe("data-context.jsx - DataProvider y useDatos", () => {
     expect(guardadoStorage[0].nombre).toBe("Carlos Alvarado");
   });
 
-  it("eliminarCandidato() debe remover el candidato de la lista", async () => {
+  it("eliminarCandidato() debe remover el candidato de la lista y limpiar su CV de Storage", async () => {
+    const { eliminarArchivosCurriculum } = await import("@/lib/supabase-db");
     localStorage.setItem(
       "aquachile_candidatos_v4",
-      JSON.stringify([{ id: "c1", nombre: "Juan", rut: "11.111.111-1" }])
+      JSON.stringify([{ id: "c1", nombre: "Juan", rut: "11.111.111-1", curriculum_path: "111111111/cv.pdf" }])
     );
 
     const { result } = renderHook(() => useDatos(), { wrapper: DataProvider });
@@ -126,6 +128,26 @@ describe("data-context.jsx - DataProvider y useDatos", () => {
     });
 
     expect(result.current.candidatos.length).toBe(0);
+    expect(eliminarArchivosCurriculum).toHaveBeenCalledWith(["111111111/cv.pdf"]);
+  });
+
+  it("debe preservar curriculum_path y curriculum_nombre de forma persistente tras recarga", async () => {
+    localStorage.setItem(
+      "aquachile_candidatos_v4",
+      JSON.stringify([
+        {
+          id: "c10",
+          nombre: "Francisca Silva",
+          rut: "18.234.567-8",
+          curriculum_path: "182345678/cv.pdf",
+          curriculum_nombre: "CV_Francisca.pdf",
+        },
+      ])
+    );
+
+    const { result } = renderHook(() => useDatos(), { wrapper: DataProvider });
+    expect(result.current.candidatos[0].curriculum_path).toBe("182345678/cv.pdf");
+    expect(result.current.candidatos[0].curriculum_nombre).toBe("CV_Francisca.pdf");
   });
 
   it("crearSolicitud() debe generar una nueva solicitud con estado 'Pendiente'", async () => {

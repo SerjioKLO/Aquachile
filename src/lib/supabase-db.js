@@ -203,24 +203,56 @@ export async function subirCurriculum(file, rutCandidato) {
 /**
  * Genera una URL firmada temporal con expiración de 600 segundos (10 minutos)
  * para previsualizar o descargar el currículum desde el bucket privado 'curriculums'.
+ * La URL firmada siempre se calcula bajo demanda y nunca se almacena permanentemente.
  *
  * @param {string} curriculumPath - Ruta del archivo en el bucket
  * @returns {Promise<string>} URL firmada
  */
 export async function obtenerUrlCurriculum(curriculumPath) {
-  if (!curriculumPath) {
+  if (!curriculumPath || typeof curriculumPath !== "string" || !curriculumPath.trim()) {
     throw new Error("Ruta de currículum no especificada.");
   }
 
+  const pathLimpio = curriculumPath.trim();
   const { data, error } = await supabase.storage
     .from("curriculums")
-    .createSignedUrl(curriculumPath, 600);
+    .createSignedUrl(pathLimpio, 600);
 
   if (error) {
-    throw error;
+    throw new Error(error.message || "Error al generar enlace del currículum en Supabase Storage.");
   }
 
-  return data?.signedUrl || "";
+  if (!data?.signedUrl) {
+    throw new Error("Supabase Storage no retornó una URL firmada válida.");
+  }
+
+  return data.signedUrl;
+}
+
+/**
+ * Elimina uno o más archivos de currículum físicos del bucket privado 'curriculums'.
+ *
+ * @param {string|string[]} paths - Ruta o arreglo de rutas relativas en el bucket
+ * @returns {Promise<{ ok: boolean, data?: any, error?: any }>}
+ */
+export async function eliminarArchivosCurriculum(paths) {
+  if (!paths) return { ok: true, data: [] };
+  const pathsArr = (Array.isArray(paths) ? paths : [paths])
+    .filter((p) => typeof p === "string" && p.trim().length > 0)
+    .map((p) => p.trim());
+
+  if (pathsArr.length === 0) return { ok: true, data: [] };
+
+  const { data, error } = await supabase.storage
+    .from("curriculums")
+    .remove(pathsArr);
+
+  if (error) {
+    console.warn("Advertencia al eliminar archivos de Storage:", error);
+    return { ok: false, error };
+  }
+
+  return { ok: true, data };
 }
 
 /**
@@ -270,5 +302,66 @@ export async function crearSolicitudEvaluacion({
 
   return data;
 }
+
+/**
+ * Invoca la Edge Function 'analizar-cv' para realizar el match y pre-análisis de currículum con IA (GroqCloud).
+ * Soporta identificador de candidato ({ candidatoId } / 'c10') o de solicitud ({ solicitudId } / 's10').
+ *
+ * @param {string|number|Object} identificador - ID de candidato o solicitud, u objeto con { candidatoId, solicitudId }
+ * @returns {Promise<{ analisis: Object, fecha: string }>}
+ */
+export async function analizarCurriculumConIA(identificador) {
+  if (!identificador) {
+    throw new Error("Se requiere el identificador de la solicitud para el análisis con IA.");
+  }
+
+  let body = {};
+  if (typeof identificador === "object" && identificador !== null) {
+    const candId = identificador.candidatoId
+      ? typeof identificador.candidatoId === "string"
+        ? parseInt(identificador.candidatoId.replace(/\D/g, ""), 10)
+        : Number(identificador.candidatoId)
+      : null;
+    const solId = identificador.solicitudId
+      ? typeof identificador.solicitudId === "string"
+        ? parseInt(identificador.solicitudId.replace(/\D/g, ""), 10)
+        : Number(identificador.solicitudId)
+      : null;
+
+    if (candId) body.candidatoId = candId;
+    if (solId) body.solicitudId = solId;
+  } else if (typeof identificador === "string") {
+    const num = parseInt(identificador.replace(/\D/g, ""), 10);
+    if (identificador.startsWith("c")) {
+      body.candidatoId = num;
+    } else {
+      body.solicitudId = num;
+    }
+  } else {
+    body.solicitudId = Number(identificador);
+  }
+
+  const { data, error } = await supabase.functions.invoke("analizar-cv", {
+    body
+  });
+
+  if (error) {
+    throw new Error(error.message || "Error al invocar la función de análisis de CV con IA.");
+  }
+
+  if (data?.error) {
+    throw new Error(data.error);
+  }
+
+  if (!data?.analisis) {
+    throw new Error("La función de IA no devolvió un análisis válido.");
+  }
+
+  return {
+    analisis: data.analisis,
+    fecha: data.fecha || new Date().toISOString()
+  };
+}
+
 
 

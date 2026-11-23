@@ -9,6 +9,7 @@ import {
   LoginPage,
   PanelPage,
   CandidatosPage,
+  DetalleCandidatoPage,
   SolicitudesPage,
   DetalleSolicitudPage,
   AdministracionPage,
@@ -39,6 +40,7 @@ export function App() {
               <Route element={<AppLayout />}>
                 <Route path="/panel" element={<PanelPage />} />
                 <Route path="/candidatos" element={<CandidatosPage />} />
+                <Route path="/candidatos/:id" element={<DetalleCandidatoPage />} />
                 <Route path="/solicitudes" element={<SolicitudesPage />} />
                 <Route path="/solicitudes/:id" element={<DetalleSolicitudPage />} />
                 <Route path="/administracion" element={<AdministracionPage />} />

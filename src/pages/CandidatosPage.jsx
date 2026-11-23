@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Search, UserPlus, Pencil, Trash2, Eye } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search, UserPlus, Pencil, Trash2, Eye, ArrowRight } from "lucide-react";
 import { useDatos } from "@/context/data-context";
 import { useAuth } from "@/context/auth-context";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { CandidatoDialog } from "@/components/candidato-dialog";
+import { ConfirmarEliminarCandidatoDialog } from "@/components/ConfirmarEliminarCandidatoDialog";
 import { FAMILIAS, formatearFecha } from "@/lib/domain";
 import { toast } from "sonner";
 export function CandidatosPage() {
@@ -38,12 +40,26 @@ export function CandidatosPage() {
   const [editar, setEditar] = useState(null);
   const [abrir, setAbrir] = useState(false);
   const [detalle, setDetalle] = useState(null);
+  const [candidatoAEliminar, setCandidatoAEliminar] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
   const filtrados = useMemo(
     () => candidatos.filter(
       (c) => (familia === "todas" || c.familia === familia) && (c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.rut.toLowerCase().includes(busqueda.toLowerCase()))
     ),
     [candidatos, busqueda, familia]
   );
+
+  async function handleConfirmarEliminar() {
+    if (!candidatoAEliminar) return;
+    setEliminando(true);
+    try {
+      await eliminarCandidato(candidatoAEliminar.id);
+      toast.success("Candidato y currículum eliminados");
+      setCandidatoAEliminar(null);
+    } finally {
+      setEliminando(false);
+    }
+  }
   return <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -110,36 +126,37 @@ export function CandidatosPage() {
                 <TableCell>{c.cargo}</TableCell>
                 <TableCell className="text-muted-foreground">{c.familia}</TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1.5">
                     <Button
-    variant="ghost"
-    size="icon"
-    aria-label="Ver"
-    onClick={() => setDetalle(c)}
-  >
-                      <Eye className="size-4" />
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="h-8 gap-1.5 text-xs font-medium"
+                    >
+                      <Link to={`/candidatos/${c.id}`}>
+                        <Eye className="size-3.5" />
+                        <span>Ver ficha / Evaluar</span>
+                        <ArrowRight className="size-3.5" />
+                      </Link>
                     </Button>
                     {puede("editar_candidatos") && <>
                         <Button
-    variant="ghost"
-    size="icon"
-    aria-label="Editar"
-    onClick={() => {
-      setEditar(c);
-      setAbrir(true);
-    }}
-  >
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Editar"
+                          onClick={() => {
+                            setEditar(c);
+                            setAbrir(true);
+                          }}
+                        >
                           <Pencil className="size-4" />
                         </Button>
                         <Button
-    variant="ghost"
-    size="icon"
-    aria-label="Eliminar"
-    onClick={() => {
-      eliminarCandidato(c.id);
-      toast.success("Candidato eliminado");
-    }}
-  >
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Eliminar"
+                          onClick={() => setCandidatoAEliminar(c)}
+                        >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </>}
@@ -177,6 +194,14 @@ export function CandidatosPage() {
             </dl>}
         </DialogContent>
       </Dialog>
+
+      <ConfirmarEliminarCandidatoDialog
+        open={!!candidatoAEliminar}
+        onOpenChange={(v) => !v && setCandidatoAEliminar(null)}
+        candidato={candidatoAEliminar}
+        onConfirm={handleConfirmarEliminar}
+        loading={eliminando}
+      />
     </div>;
 }
 function Fila({ t, v }) {

@@ -25,8 +25,7 @@ import { enviarConfirmacionPostulacion } from "@/services/resendService";
 import {
   cargarCatalogoSupabase,
   resolverCargoParaCandidato,
-  subirCurriculum,
-  crearSolicitudEvaluacion
+  subirCurriculum
 } from "@/lib/supabase-db";
 import { useDatos } from "@/context/data-context";
 import { Input } from "@/components/ui/input";
@@ -109,7 +108,7 @@ function formatearRut(valor) {
 }
 
 export function PostulacionPage({ initialValues } = {}) {
-  const { guardarCandidato, crearSolicitud } = useDatos();
+  const { guardarCandidato } = useDatos();
   const [catalogo, setCatalogo] = useState({
     familias: FAMILIAS,
     cargosPorFamilia: {}
@@ -198,7 +197,7 @@ export function PostulacionPage({ initialValues } = {}) {
       // 2. Resolver claves foráneas
       const cargoResuelto = await resolverCargoParaCandidato(data.familia, data.cargo);
 
-      // 3. Insertar en tabla public.candidato
+      // 3. Insertar en tabla public.candidato con el CV adjunto
       const { data: candInsertado, error: candErr } = await supabase
         .from("candidato")
         .insert([
@@ -209,7 +208,9 @@ export function PostulacionPage({ initialValues } = {}) {
             telefono: data.telefono.trim(),
             familia_id: cargoResuelto.familia_id,
             cargo_id: cargoResuelto.cargo_id,
-            cargo_personalizado: cargoResuelto.cargo_personalizado
+            cargo_personalizado: cargoResuelto.cargo_personalizado,
+            curriculum_path: cvSubido.path,
+            curriculum_nombre: cvSubido.nombreOriginal
           }
         ])
         .select()
@@ -217,7 +218,7 @@ export function PostulacionPage({ initialValues } = {}) {
 
       if (candErr) {
         if (candErr.code === "23505") {
-          // El RUT ya existe en el sistema
+          // El RUT ya existe en el sistema: actualizar con el nuevo CV y datos
           const { data: candExistente } = await supabase
             .from("candidato")
             .select("id")
@@ -226,6 +227,19 @@ export function PostulacionPage({ initialValues } = {}) {
 
           if (candExistente?.id) {
             insertado = candExistente;
+            await supabase
+              .from("candidato")
+              .update({
+                nombre_completo: data.nombre.trim(),
+                correo: data.correo.trim(),
+                telefono: data.telefono.trim(),
+                familia_id: cargoResuelto.familia_id,
+                cargo_id: cargoResuelto.cargo_id,
+                cargo_personalizado: cargoResuelto.cargo_personalizado,
+                curriculum_path: cvSubido.path,
+                curriculum_nombre: cvSubido.nombreOriginal
+              })
+              .eq("id", candExistente.id);
           } else {
             setErrorEnvio("Ya existe una postulación registrada con ese RUT en el sistema.");
             toast.error("Ya existe una postulación con ese RUT.");
@@ -246,21 +260,6 @@ export function PostulacionPage({ initialValues } = {}) {
       }
 
       guardadoEnNube = true;
-
-      // 4. Insertar en tabla public.solicitud_evaluacion con el CV
-      if (insertado?.id) {
-        try {
-          await crearSolicitudEvaluacion({
-            candidato_id: insertado.id,
-            prioridad: "Media",
-            estado: "Pendiente",
-            curriculum_path: cvSubido.path,
-            curriculum_nombre: cvSubido.nombreOriginal
-          });
-        } catch (solErr) {
-          console.warn("Advertencia al insertar solicitud_evaluacion:", solErr);
-        }
-      }
     } catch (err) {
       console.warn("Fallo al guardar en Supabase Cloud:", err);
       const msg = err?.message || "";
@@ -280,7 +279,7 @@ export function PostulacionPage({ initialValues } = {}) {
       }
     }
 
-    // 5. Enviar confirmación por correo
+    // 4. Enviar confirmación por correo
     const fechaFormateada = new Date().toLocaleDateString("es-CL", {
       day: "2-digit",
       month: "long",
@@ -295,29 +294,20 @@ export function PostulacionPage({ initialValues } = {}) {
       fecha: fechaFormateada
     });
 
-    // 6. Registrar en el contexto (fallback / sincronización local)
+    // 5. Registrar en el contexto (fallback / sincronización local)
     const candIdCtx = insertado?.id ? `c${insertado.id}` : `c${Date.now()}`;
     guardarCandidato({
       id: candIdCtx,
+      numericId: insertado?.id,
       yaEnSupabase: guardadoEnNube,
       rut: data.rut,
       nombre: data.nombre.trim(),
       correo: data.correo.trim(),
       telefono: data.telefono.trim(),
       cargo: data.cargo.trim(),
-      familia: data.familia
-    });
-
-    crearSolicitud({
-      candidatoId: candIdCtx,
-      cargo: data.cargo.trim(),
       familia: data.familia,
-      psicologo: "Ps. Andrés Miranda",
-      prioridad: "Media",
-      fechaSolicitud: new Date().toISOString().slice(0, 10),
       curriculum_path: cvSubido.path,
-      curriculum_nombre: cvSubido.nombreOriginal,
-      yaEnSupabase: guardadoEnNube
+      curriculum_nombre: cvSubido.nombreOriginal
     });
 
     toast.success("¡Postulación enviada exitosamente!");

@@ -18,7 +18,8 @@ import {
 import {
   cargarCatalogoSupabase,
   resolverCargoParaCandidato,
-  cargarEvaluadoresSupabase
+  cargarEvaluadoresSupabase,
+  eliminarArchivosCurriculum
 } from "@/lib/supabase-db";
 import { api, toFrontendCandidato, toFrontendSolicitud } from "@/services/api";
 import { toast } from "sonner";
@@ -143,6 +144,10 @@ export function DataProvider({ children }) {
               familia_id,
               cargo_id,
               cargo_personalizado,
+              curriculum_path,
+              curriculum_nombre,
+              analisis_ia,
+              analisis_ia_fecha,
               creado_en,
               familia_cargo:familia_id ( id, nombre ),
               cargo:cargo_id ( id, nombre )
@@ -151,24 +156,66 @@ export function DataProvider({ children }) {
 
           if (!supaErr && supaCands) {
             setSupabaseConectado(true);
-            const candsMapeados = supaCands.map((c) => ({
-              id: `c${c.id}`,
-              numericId: c.id,
-              rut: c.rut,
-              nombre: c.nombre_completo,
-              correo: c.correo,
-              telefono: c.telefono,
-              cargo: c.cargo?.nombre || c.cargo_personalizado || "Sin cargo",
-              cargo_id: c.cargo_id,
-              cargo_personalizado: c.cargo_personalizado,
-              familia: c.familia_cargo?.nombre || "Sin familia",
-              familia_id: c.familia_id,
-              activo: true,
-              creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
-            }));
+            const candsPrevios = leerStorage(STORAGE_CANDIDATOS, []);
+            const candsMapeados = supaCands.map((c) => {
+              const previo = candsPrevios.find(
+                (p) => p.rut === c.rut || p.id === `c${c.id}` || p.numericId === c.id
+              );
+              const curriculum_path =
+                c.curriculum_path ||
+                previo?.curriculum_path ||
+                previo?.curriculumPath ||
+                null;
+              const curriculum_nombre =
+                c.curriculum_nombre ||
+                previo?.curriculum_nombre ||
+                previo?.curriculumNombre ||
+                null;
+              const analisis_ia =
+                c.analisis_ia ||
+                previo?.analisis_ia ||
+                previo?.analisisIa ||
+                null;
+              const analisis_ia_fecha =
+                c.analisis_ia_fecha ||
+                previo?.analisis_ia_fecha ||
+                previo?.analisisIaFecha ||
+                null;
 
-            setCandidatos(candsMapeados);
-            guardarStorage(STORAGE_CANDIDATOS, candsMapeados);
+              return {
+                id: `c${c.id}`,
+                numericId: c.id,
+                rut: c.rut,
+                nombre: c.nombre_completo,
+                correo: c.correo,
+                telefono: c.telefono,
+                cargo: c.cargo?.nombre || c.cargo_personalizado || "Sin cargo",
+                cargo_id: c.cargo_id,
+                cargo_personalizado: c.cargo_personalizado,
+                familia: c.familia_cargo?.nombre || "Sin familia",
+                familia_id: c.familia_id,
+                curriculum_path,
+                curriculum_nombre,
+                curriculumPath: curriculum_path,
+                curriculumNombre: curriculum_nombre,
+                analisis_ia,
+                analisisIa: analisis_ia,
+                analisis_ia_fecha,
+                analisisIaFecha: analisis_ia_fecha,
+                activo: true,
+                creado: c.creado_en ? c.creado_en.slice(0, 10) : hoyISO()
+              };
+            });
+
+            if (candsMapeados.length > 0) {
+              setCandidatos(candsMapeados);
+              guardarStorage(STORAGE_CANDIDATOS, candsMapeados);
+            } else if (candsPrevios.length > 0) {
+              setCandidatos(candsPrevios);
+            } else {
+              setCandidatos([]);
+              guardarStorage(STORAGE_CANDIDATOS, []);
+            }
           } else {
             console.warn("Consulta a tabla candidato en Supabase:", supaErr);
           }
@@ -185,10 +232,16 @@ export function DataProvider({ children }) {
               fecha_solicitud,
               curriculum_path,
               curriculum_nombre,
+              analisis_ia,
+              analisis_ia_fecha,
               candidato:candidato_id (
                 id,
                 nombre_completo,
                 rut,
+                curriculum_path,
+                curriculum_nombre,
+                analisis_ia,
+                analisis_ia_fecha,
                 cargo:cargo_id ( id, nombre ),
                 cargo_personalizado,
                 familia_cargo:familia_id ( id, nombre )
@@ -207,10 +260,39 @@ export function DataProvider({ children }) {
             .order("id", { ascending: false });
 
           if (!solErr && supaSols) {
+            const solsPrevias = leerStorage(STORAGE_SOLICITUDES, []);
             const solsMapeadas = supaSols.map((s) => {
               const res = Array.isArray(s.resultado_evaluacion)
                 ? s.resultado_evaluacion[0]
                 : s.resultado_evaluacion;
+
+              const previa = solsPrevias.find(
+                (p) => p.id === `s${s.id}` || p.numericId === s.id
+              );
+              const curriculum_path =
+                s.candidato?.curriculum_path ||
+                s.curriculum_path ||
+                previa?.curriculum_path ||
+                previa?.curriculumPath ||
+                null;
+              const curriculum_nombre =
+                s.candidato?.curriculum_nombre ||
+                s.curriculum_nombre ||
+                previa?.curriculum_nombre ||
+                previa?.curriculumNombre ||
+                null;
+              const analisis_ia =
+                s.candidato?.analisis_ia ||
+                s.analisis_ia ||
+                previa?.analisis_ia ||
+                previa?.analisisIa ||
+                null;
+              const analisis_ia_fecha =
+                s.candidato?.analisis_ia_fecha ||
+                s.analisis_ia_fecha ||
+                previa?.analisis_ia_fecha ||
+                previa?.analisisIaFecha ||
+                null;
 
               return {
                 id: `s${s.id}`,
@@ -232,10 +314,14 @@ export function DataProvider({ children }) {
                 actualizada: s.fecha_solicitud
                   ? s.fecha_solicitud.slice(0, 10)
                   : hoyISO(),
-                curriculum_path: s.curriculum_path || null,
-                curriculum_nombre: s.curriculum_nombre || null,
-                curriculumPath: s.curriculum_path || null,
-                curriculumNombre: s.curriculum_nombre || null,
+                curriculum_path,
+                curriculum_nombre,
+                curriculumPath: curriculum_path,
+                curriculumNombre: curriculum_nombre,
+                analisis_ia,
+                analisisIa: analisis_ia,
+                analisis_ia_fecha,
+                analisisIaFecha: analisis_ia_fecha,
                 evaluacion: res
                   ? {
                       fechaEntrevista: res.fecha_entrevista || "",
@@ -244,12 +330,19 @@ export function DataProvider({ children }) {
                       preguntasUsadas: {},
                       notasPregunta: {}
                     }
-                  : evaluacionVacia()
+                  : previa?.evaluacion || evaluacionVacia()
               };
             });
 
-            setSolicitudes(solsMapeadas);
-            guardarStorage(STORAGE_SOLICITUDES, solsMapeadas);
+            if (solsMapeadas.length > 0) {
+              setSolicitudes(solsMapeadas);
+              guardarStorage(STORAGE_SOLICITUDES, solsMapeadas);
+            } else if (solsPrevias.length > 0) {
+              setSolicitudes(solsPrevias);
+            } else {
+              setSolicitudes([]);
+              guardarStorage(STORAGE_SOLICITUDES, []);
+            }
           }
         } catch (supaEx) {
           console.warn("No se pudo cargar desde Supabase:", supaEx);
@@ -277,7 +370,17 @@ export function DataProvider({ children }) {
           const existe = prev.some((c) => c.id === datos.id);
           const actualizados = existe
             ? prev.map((c) =>
-                c.id === datos.id ? { ...c, ...datos, id: c.id } : c
+                c.id === datos.id
+                  ? {
+                      ...c,
+                      ...datos,
+                      curriculum_path: datos.curriculum_path ?? datos.curriculumPath ?? c.curriculum_path,
+                      curriculum_nombre: datos.curriculum_nombre ?? datos.curriculumNombre ?? c.curriculum_nombre,
+                      analisis_ia: datos.analisis_ia ?? datos.analisisIa ?? c.analisis_ia,
+                      analisis_ia_fecha: datos.analisis_ia_fecha ?? datos.analisisIaFecha ?? c.analisis_ia_fecha,
+                      id: c.id
+                    }
+                  : c
               )
             : [{ ...datos, activo: true, creado: hoyISO() }, ...prev];
           guardarStorage(STORAGE_CANDIDATOS, actualizados);
@@ -305,17 +408,31 @@ export function DataProvider({ children }) {
                 datos.familia,
                 datos.cargo
               );
+              const payloadUpdate = {
+                rut: datos.rut,
+                nombre_completo: datos.nombre,
+                correo: datos.correo,
+                telefono: datos.telefono,
+                familia_id: resuelto.familia_id,
+                cargo_id: resuelto.cargo_id,
+                cargo_personalizado: resuelto.cargo_personalizado
+              };
+              if (datos.curriculum_path !== undefined || datos.curriculumPath !== undefined) {
+                payloadUpdate.curriculum_path = datos.curriculum_path || datos.curriculumPath || null;
+              }
+              if (datos.curriculum_nombre !== undefined || datos.curriculumNombre !== undefined) {
+                payloadUpdate.curriculum_nombre = datos.curriculum_nombre || datos.curriculumNombre || null;
+              }
+              if (datos.analisis_ia !== undefined || datos.analisisIa !== undefined) {
+                payloadUpdate.analisis_ia = datos.analisis_ia || datos.analisisIa || null;
+              }
+              if (datos.analisis_ia_fecha !== undefined || datos.analisisIaFecha !== undefined) {
+                payloadUpdate.analisis_ia_fecha = datos.analisis_ia_fecha || datos.analisisIaFecha || null;
+              }
+
               await supabase
                 .from("candidato")
-                .update({
-                  rut: datos.rut,
-                  nombre_completo: datos.nombre,
-                  correo: datos.correo,
-                  telefono: datos.telefono,
-                  familia_id: resuelto.familia_id,
-                  cargo_id: resuelto.cargo_id,
-                  cargo_personalizado: resuelto.cargo_personalizado
-                })
+                .update(payloadUpdate)
                 .eq("id", numericId);
             }
           } catch (err) {
@@ -326,6 +443,14 @@ export function DataProvider({ children }) {
         nuevoCandidato = {
           ...datos,
           id: datos.id,
+          curriculum_path: datos.curriculum_path || datos.curriculumPath || null,
+          curriculum_nombre: datos.curriculum_nombre || datos.curriculumNombre || null,
+          curriculumPath: datos.curriculum_path || datos.curriculumPath || null,
+          curriculumNombre: datos.curriculum_nombre || datos.curriculumNombre || null,
+          analisis_ia: datos.analisis_ia || datos.analisisIa || null,
+          analisisIa: datos.analisis_ia || datos.analisisIa || null,
+          analisis_ia_fecha: datos.analisis_ia_fecha || datos.analisisIaFecha || null,
+          analisisIaFecha: datos.analisis_ia_fecha || datos.analisisIaFecha || null,
           activo: true,
           creado: hoyISO()
         };
@@ -343,6 +468,14 @@ export function DataProvider({ children }) {
         nuevoCandidato = {
           ...datos,
           id: idGenerado,
+          curriculum_path: datos.curriculum_path || datos.curriculumPath || null,
+          curriculum_nombre: datos.curriculum_nombre || datos.curriculumNombre || null,
+          curriculumPath: datos.curriculum_path || datos.curriculumPath || null,
+          curriculumNombre: datos.curriculum_nombre || datos.curriculumNombre || null,
+          analisis_ia: datos.analisis_ia || datos.analisisIa || null,
+          analisisIa: datos.analisis_ia || datos.analisisIa || null,
+          analisis_ia_fecha: datos.analisis_ia_fecha || datos.analisisIaFecha || null,
+          analisisIaFecha: datos.analisis_ia_fecha || datos.analisisIaFecha || null,
           activo: true,
           creado: hoyISO()
         };
@@ -371,19 +504,22 @@ export function DataProvider({ children }) {
               datos.familia,
               datos.cargo
             );
+            const payloadInsert = {
+              rut: datos.rut,
+              nombre_completo: datos.nombre,
+              correo: datos.correo,
+              telefono: datos.telefono,
+              familia_id: resuelto.familia_id,
+              cargo_id: resuelto.cargo_id,
+              cargo_personalizado: resuelto.cargo_personalizado,
+              curriculum_path: datos.curriculum_path || datos.curriculumPath || null,
+              curriculum_nombre: datos.curriculum_nombre || datos.curriculumNombre || null,
+              analisis_ia: datos.analisis_ia || datos.analisisIa || null,
+              analisis_ia_fecha: datos.analisis_ia_fecha || datos.analisisIaFecha || null
+            };
             const { data: ins } = await supabase
               .from("candidato")
-              .insert([
-                {
-                  rut: datos.rut,
-                  nombre_completo: datos.nombre,
-                  correo: datos.correo,
-                  telefono: datos.telefono,
-                  familia_id: resuelto.familia_id,
-                  cargo_id: resuelto.cargo_id,
-                  cargo_personalizado: resuelto.cargo_personalizado
-                }
-              ])
+              .insert([payloadInsert])
               .select()
               .single();
 
@@ -416,6 +552,33 @@ export function DataProvider({ children }) {
 
   const eliminarCandidato = useCallback(
     async (id) => {
+      // 1. Recolectar curriculum_path del candidato y de sus solicitudes asociadas
+      const cand = candidatos.find((c) => c.id === id);
+      const solsAsociadas = solicitudes.filter((s) => s.candidatoId === id);
+
+      const pathsAEliminar = new Set();
+      if (cand?.curriculum_path) pathsAEliminar.add(cand.curriculum_path);
+      if (cand?.curriculumPath) pathsAEliminar.add(cand.curriculumPath);
+
+      solsAsociadas.forEach((s) => {
+        if (s.curriculum_path) pathsAEliminar.add(s.curriculum_path);
+        if (s.curriculumPath) pathsAEliminar.add(s.curriculumPath);
+      });
+
+      const paths = Array.from(pathsAEliminar).filter(
+        (p) => typeof p === "string" && p.trim().length > 0
+      );
+
+      // 2. Eliminar archivos físicos del bucket de Storage (no bloqueante ante errores)
+      if (paths.length > 0) {
+        try {
+          await eliminarArchivosCurriculum(paths);
+        } catch (storageEx) {
+          console.warn("Advertencia al eliminar archivos de currículum en Storage:", storageEx);
+        }
+      }
+
+      // 3. Remover del estado local y storage
       setCandidatos((prev) => {
         const actualizados = prev.filter((c) => c.id !== id);
         guardarStorage(STORAGE_CANDIDATOS, actualizados);
@@ -426,6 +589,8 @@ export function DataProvider({ children }) {
         guardarStorage(STORAGE_SOLICITUDES, actualizados);
         return actualizados;
       });
+
+      // 4. Remover registro en Backend o Supabase
       if (backendConectado) {
         try {
           await api.candidatos.eliminar(id);
@@ -443,14 +608,37 @@ export function DataProvider({ children }) {
         }
       }
     },
-    [backendConectado]
+    [candidatos, solicitudes, backendConectado]
   );
 
   const crearSolicitud = useCallback(
     async (datos) => {
       const idTemp = datos.id || `s${Date.now()}`;
-      const curriculum_path = datos.curriculum_path || datos.curriculumPath || null;
-      const curriculum_nombre = datos.curriculum_nombre || datos.curriculumNombre || null;
+      const candAsociado = candidatos.find((c) => c.id === datos.candidatoId);
+      const curriculum_path =
+        datos.curriculum_path ||
+        datos.curriculumPath ||
+        candAsociado?.curriculum_path ||
+        candAsociado?.curriculumPath ||
+        null;
+      const curriculum_nombre =
+        datos.curriculum_nombre ||
+        datos.curriculumNombre ||
+        candAsociado?.curriculum_nombre ||
+        candAsociado?.curriculumNombre ||
+        null;
+      const analisis_ia =
+        datos.analisis_ia ||
+        datos.analisisIa ||
+        candAsociado?.analisis_ia ||
+        candAsociado?.analisisIa ||
+        null;
+      const analisis_ia_fecha =
+        datos.analisis_ia_fecha ||
+        datos.analisisIaFecha ||
+        candAsociado?.analisis_ia_fecha ||
+        candAsociado?.analisisIaFecha ||
+        null;
 
       const nueva = {
         ...datos,
@@ -462,7 +650,11 @@ export function DataProvider({ children }) {
         curriculum_path,
         curriculum_nombre,
         curriculumPath: curriculum_path,
-        curriculumNombre: curriculum_nombre
+        curriculumNombre: curriculum_nombre,
+        analisis_ia,
+        analisisIa: analisis_ia,
+        analisis_ia_fecha,
+        analisisIaFecha: analisis_ia_fecha
       };
 
       setSolicitudes((prev) => {
@@ -515,7 +707,9 @@ export function DataProvider({ children }) {
               prioridad: datos.prioridad || "Media",
               estado: datos.estado || "Pendiente",
               curriculum_path,
-              curriculum_nombre
+              curriculum_nombre,
+              analisis_ia,
+              analisis_ia_fecha
             };
             if (evaluadorId) {
               payload.evaluador_id = evaluadorId;
@@ -688,6 +882,93 @@ export function DataProvider({ children }) {
     toast.success(`Evaluador "${nombre}" agregado a la lista.`);
   }, []);
 
+  const guardarAnalisisIA = useCallback(
+    async (id, analisis, fecha) => {
+      const fechaFinal = fecha || hoyISO();
+      const idStr = String(id || "");
+      const isCand = idStr.startsWith("c");
+
+      // Actualizar en el estado de solicitudes
+      setSolicitudes((prev) => {
+        const actualizados = prev.map((s) => {
+          if (s.id === id || (isCand && s.candidatoId === id)) {
+            return {
+              ...s,
+              analisis_ia: analisis,
+              analisisIa: analisis,
+              analisis_ia_fecha: fechaFinal,
+              analisisIaFecha: fechaFinal,
+              actualizada: hoyISO()
+            };
+          }
+          return s;
+        });
+        guardarStorage(STORAGE_SOLICITUDES, actualizados);
+        return actualizados;
+      });
+
+      // Actualizar en el estado de candidatos
+      setCandidatos((prev) => {
+        const actualizados = prev.map((c) => {
+          if (c.id === id || (!isCand && solicitudes.find((s) => s.id === id)?.candidatoId === c.id)) {
+            return {
+              ...c,
+              analisis_ia: analisis,
+              analisisIa: analisis,
+              analisis_ia_fecha: fechaFinal,
+              analisisIaFecha: fechaFinal
+            };
+          }
+          return c;
+        });
+        guardarStorage(STORAGE_CANDIDATOS, actualizados);
+        return actualizados;
+      });
+
+      if (!backendConectado) {
+        try {
+          const numericId = Number(idStr.replace(/\D/g, ""));
+          if (numericId) {
+            if (isCand) {
+              await supabase
+                .from("candidato")
+                .update({
+                  analisis_ia: analisis,
+                  analisis_ia_fecha: fechaFinal
+                })
+                .eq("id", numericId);
+            } else {
+              await supabase
+                .from("solicitud_evaluacion")
+                .update({
+                  analisis_ia: analisis,
+                  analisis_ia_fecha: fechaFinal
+                })
+                .eq("id", numericId);
+
+              const sol = solicitudes.find((s) => s.id === id);
+              if (sol?.candidatoId) {
+                const candNum = Number(String(sol.candidatoId).replace(/\D/g, ""));
+                if (candNum) {
+                  await supabase
+                    .from("candidato")
+                    .update({
+                      analisis_ia: analisis,
+                      analisis_ia_fecha: fechaFinal
+                    })
+                    .eq("id", candNum);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("No se pudo actualizar analisis_ia en Supabase:", err);
+        }
+      }
+    },
+    [backendConectado, solicitudes]
+  );
+
   const value = useMemo(
     () => ({
       candidatos,
@@ -703,6 +984,7 @@ export function DataProvider({ children }) {
       crearSolicitud,
       cambiarEstado,
       guardarEvaluacion,
+      guardarAnalisisIA,
       nombreCandidato: (id) =>
         candidatos.find((c) => c.id === id)?.nombre ?? "Candidato eliminado",
       restablecerDatosPrueba,
@@ -724,6 +1006,7 @@ export function DataProvider({ children }) {
       crearSolicitud,
       cambiarEstado,
       guardarEvaluacion,
+      guardarAnalisisIA,
       restablecerDatosPrueba,
       agregarCargo,
       agregarPsicologo,
@@ -732,6 +1015,34 @@ export function DataProvider({ children }) {
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+}
+
+export function generarAnalisisIaMock(cargo = "Cargo", familia = "Operaciones") {
+  return {
+    puntaje_afinidad: 85,
+    nivel_ajuste: "Alto",
+    resumen_ejecutivo: [
+      `Perfil profesional con sólida pertinencia para el área de ${familia}.`,
+      `Experiencia comprobable en funciones y responsabilidades asociadas al cargo de ${cargo}.`,
+      "Competencias técnicas y operativas alineadas con las normativas de la industria acuícola.",
+      "Trayectoria estable con disposición a desempeñarse en los centros operativos de AquaChile."
+    ],
+    fortalezas_cargo: [
+      "Experiencia directa y conocimientos específicos en el área de postulación",
+      "Orientación a la excelencia operativa, seguridad ocupacional y calidad",
+      "Buenas referencias de desempeño en entornos productivos de ritmo dinámico"
+    ],
+    brechas_detectadas: [
+      "Familiarización inicial con los sistemas ERP y protocolos de reportería interna de AquaChile",
+      "Capacitación en normativas específicas de bioseguridad marítima y ambiental"
+    ],
+    alertas_tempranas: [],
+    preguntas_sugeridas: [
+      `¿Cuál ha sido el principal desafío operativo que ha enfrentado desempeñándose en ${cargo}?`,
+      "Describa una situación en la que debió solucionar un imprevisto bajo presión de plazos.",
+      "¿Qué aspectos de la cultura laboral de AquaChile motivan su postulación a esta vacante?"
+    ]
+  };
 }
 
 export function useDatos() {

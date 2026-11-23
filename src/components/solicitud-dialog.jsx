@@ -21,7 +21,7 @@ import { PSICOLOGOS } from "@/lib/domain";
 import { useDatos } from "@/context/data-context";
 import { enviarCitacionEntrevista } from "@/services/resendService";
 import { toast } from "sonner";
-export function SolicitudDialog({ open, onOpenChange }) {
+export function SolicitudDialog({ open, onOpenChange, candidatoInicialId = "" }) {
   const { candidatos, crearSolicitud, psicologos: listaPsicologos } = useDatos();
   const psicologosDisponibles = listaPsicologos?.length ? listaPsicologos : PSICOLOGOS;
   const [candidatoId, setCandidatoId] = useState("");
@@ -32,13 +32,15 @@ export function SolicitudDialog({ open, onOpenChange }) {
   const [errores, setErrores] = useState({});
   useEffect(() => {
     if (!open) return;
-    setCandidatoId("");
-    setCargo("");
+    const cid = candidatoInicialId || "";
+    setCandidatoId(cid);
+    const cand = candidatos.find((c) => c.id === cid);
+    setCargo(cand?.cargo || "");
     setPsicologo(psicologosDisponibles[0] || PSICOLOGOS[0]);
     setPrioridad("Media");
     setFecha((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
     setErrores({});
-  }, [open, psicologosDisponibles]);
+  }, [open, psicologosDisponibles, candidatoInicialId, candidatos]);
   const candidato = candidatos.find((c) => c.id === candidatoId);
   function enviar(ev) {
     ev.preventDefault();

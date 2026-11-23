@@ -204,29 +204,18 @@ describe("PostulacionPage.jsx - Subida de CV y validaciones", () => {
       });
 
       await waitFor(() => {
-        expect(crearSolicitudEvaluacion).toHaveBeenCalledWith({
-          candidato_id: 45,
-          prioridad: "Media",
-          estado: "Pendiente",
-          curriculum_path: "123456789/123456789_cv.pdf",
-          curriculum_nombre: "curriculum.pdf",
-        });
+        expect(mockGuardarCandidato).toHaveBeenCalledWith(
+          expect.objectContaining({
+            rut: "12.345.678-9",
+            curriculum_path: "123456789/123456789_cv.pdf",
+            curriculum_nombre: "curriculum.pdf",
+            yaEnSupabase: true,
+          })
+        );
       });
 
-      expect(mockGuardarCandidato).toHaveBeenCalledWith(
-        expect.objectContaining({
-          rut: "12.345.678-9",
-          yaEnSupabase: true,
-        })
-      );
-
-      expect(mockCrearSolicitud).toHaveBeenCalledWith(
-        expect.objectContaining({
-          curriculum_path: "123456789/123456789_cv.pdf",
-          curriculum_nombre: "curriculum.pdf",
-          yaEnSupabase: true,
-        })
-      );
+      expect(crearSolicitudEvaluacion).not.toHaveBeenCalled();
+      expect(mockCrearSolicitud).not.toHaveBeenCalled();
 
       expect(toast.success).toHaveBeenCalledWith("¡Postulación enviada exitosamente!");
     });
