@@ -183,6 +183,8 @@ export function DataProvider({ children }) {
               prioridad,
               estado,
               fecha_solicitud,
+              curriculum_path,
+              curriculum_nombre,
               candidato:candidato_id (
                 id,
                 nombre_completo,
@@ -230,6 +232,10 @@ export function DataProvider({ children }) {
                 actualizada: s.fecha_solicitud
                   ? s.fecha_solicitud.slice(0, 10)
                   : hoyISO(),
+                curriculum_path: s.curriculum_path || null,
+                curriculum_nombre: s.curriculum_nombre || null,
+                curriculumPath: s.curriculum_path || null,
+                curriculumNombre: s.curriculum_nombre || null,
                 evaluacion: res
                   ? {
                       fechaEntrevista: res.fecha_entrevista || "",
@@ -442,25 +448,37 @@ export function DataProvider({ children }) {
 
   const crearSolicitud = useCallback(
     async (datos) => {
-      const idTemp = `s${Date.now()}`;
+      const idTemp = datos.id || `s${Date.now()}`;
+      const curriculum_path = datos.curriculum_path || datos.curriculumPath || null;
+      const curriculum_nombre = datos.curriculum_nombre || datos.curriculumNombre || null;
+
       const nueva = {
         ...datos,
         id: idTemp,
-        codigo: `SOL-${1001 + solicitudes.length + 10}`,
-        estado: "Pendiente",
+        codigo: datos.codigo || `SOL-${1001 + solicitudes.length + 10}`,
+        estado: datos.estado || "Pendiente",
         actualizada: hoyISO(),
-        evaluacion: evaluacionVacia()
+        evaluacion: datos.evaluacion || evaluacionVacia(),
+        curriculum_path,
+        curriculum_nombre,
+        curriculumPath: curriculum_path,
+        curriculumNombre: curriculum_nombre
       };
+
       setSolicitudes((prev) => {
         const actualizados = [nueva, ...prev];
         guardarStorage(STORAGE_SOLICITUDES, actualizados);
         return actualizados;
       });
 
+      if (datos.yaEnSupabase) {
+        return nueva;
+      }
+
       if (backendConectado) {
         try {
           const numericCandId =
-            Number(datos.candidatoId.replace(/\D/g, "")) || 1;
+            Number(String(datos.candidatoId).replace(/\D/g, "")) || 1;
           await api.solicitudes.crear({
             candidatoId: numericCandId,
             cargoNombre: datos.cargo,
@@ -479,27 +497,33 @@ export function DataProvider({ children }) {
 
           // Buscar evaluador_id en la tabla public.usuario
           let evaluadorId = 2; // fallback evaluador
-          const { data: usuarioData } = await supabase
-            .from("usuario")
-            .select("id")
-            .ilike("nombre_completo", datos.psicologo?.trim() || "")
-            .maybeSingle();
+          if (datos.psicologo) {
+            const { data: usuarioData } = await supabase
+              .from("usuario")
+              .select("id")
+              .ilike("nombre_completo", datos.psicologo?.trim() || "")
+              .maybeSingle();
 
-          if (usuarioData?.id) {
-            evaluadorId = usuarioData.id;
+            if (usuarioData?.id) {
+              evaluadorId = usuarioData.id;
+            }
           }
 
           if (numericCandId) {
+            const payload = {
+              candidato_id: numericCandId,
+              prioridad: datos.prioridad || "Media",
+              estado: datos.estado || "Pendiente",
+              curriculum_path,
+              curriculum_nombre
+            };
+            if (evaluadorId) {
+              payload.evaluador_id = evaluadorId;
+            }
+
             const { data: insSol } = await supabase
               .from("solicitud_evaluacion")
-              .insert([
-                {
-                  candidato_id: numericCandId,
-                  evaluador_id: evaluadorId,
-                  prioridad: datos.prioridad || "Media",
-                  estado: "Pendiente"
-                }
-              ])
+              .insert([payload])
               .select()
               .single();
 
@@ -511,19 +535,25 @@ export function DataProvider({ children }) {
                         ...s,
                         id: `s${insSol.id}`,
                         numericId: insSol.id,
-                        codigo: `SOL-${insSol.id}`
+                        codigo: `SOL-${insSol.id}`,
+                        curriculum_path: insSol.curriculum_path || s.curriculum_path,
+                        curriculum_nombre: insSol.curriculum_nombre || s.curriculum_nombre,
+                        curriculumPath: insSol.curriculum_path || s.curriculumPath,
+                        curriculumNombre: insSol.curriculum_nombre || s.curriculumNombre
                       }
                     : s
                 );
                 guardarStorage(STORAGE_SOLICITUDES, act);
                 return act;
               });
+              return insSol;
             }
           }
         } catch (err) {
           console.warn("No se pudo registrar solicitud en Supabase:", err);
         }
       }
+      return nueva;
     },
     [solicitudes.length, backendConectado]
   );

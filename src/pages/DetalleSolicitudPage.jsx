@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Save, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, CheckCircle2, Circle, Loader2, FileText, ExternalLink } from "lucide-react";
 import { useDatos } from "@/context/data-context";
 import { useAuth } from "@/context/auth-context";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,7 @@ import {
   evaluacionVacia,
   formatearFecha
 } from "@/lib/domain";
+import { obtenerUrlCurriculum } from "@/lib/supabase-db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 const iconos = {
@@ -38,9 +39,32 @@ export function DetalleSolicitudPage() {
   const solicitud = solicitudes.find((s) => s.id === id);
   const candidato = candidatos.find((c) => c.id === solicitud?.candidatoId);
   const [form, setForm] = useState(solicitud?.evaluacion ?? evaluacionVacia());
+  const [cargandoCv, setCargandoCv] = useState(false);
   useEffect(() => {
     if (solicitud) setForm(solicitud.evaluacion);
   }, [solicitud?.id]);
+
+  async function handleDescargarCv() {
+    const path = solicitud?.curriculum_path || solicitud?.curriculumPath;
+    if (!path) {
+      toast.error("No se ha registrado una ruta para este currículum.");
+      return;
+    }
+    try {
+      setCargandoCv(true);
+      const url = await obtenerUrlCurriculum(path);
+      if (url) {
+        window.open(url, "_blank");
+      } else {
+        toast.error("No se pudo obtener el enlace temporal de visualización.");
+      }
+    } catch (err) {
+      console.error("Error al obtener URL del CV:", err);
+      toast.error("Error al generar enlace del currículum.");
+    } finally {
+      setCargandoCv(false);
+    }
+  }
   if (!solicitud || !candidato) {
     return <div>
         <p className="text-muted-foreground">La solicitud no existe o fue eliminada.</p>
@@ -108,6 +132,35 @@ export function DetalleSolicitudPage() {
             </div>
           </div>
         </div>
+
+        {(solicitud.curriculum_path || solicitud.curriculumPath) && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <FileText className="size-5 text-primary shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Currículum Vitae adjunto</p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  {solicitud.curriculum_nombre || solicitud.curriculumNombre || "Documento adjunto"}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={cargandoCv}
+              onClick={handleDescargarCv}
+              className="gap-2 shrink-0"
+            >
+              {cargandoCv ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ExternalLink className="size-4" />
+              )}
+              <span>Ver {solicitud.curriculum_nombre || solicitud.curriculumNombre || "Currículum"}</span>
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card className="mt-4 p-6">

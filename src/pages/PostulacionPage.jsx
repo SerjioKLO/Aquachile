@@ -1,6 +1,10 @@
 import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
 import {
   CheckCircle2,
   FileText,
@@ -18,8 +22,12 @@ import fondoImg from "@/assets/fondo.jpg";
 import { FAMILIAS } from "@/lib/domain";
 import { CargoCombobox } from "@/components/cargo-combobox";
 import { enviarConfirmacionPostulacion } from "@/services/resendService";
-import { cargarCatalogoSupabase, resolverCargoParaCandidato } from "@/lib/supabase-db";
-import { useEffect } from "react";
+import {
+  cargarCatalogoSupabase,
+  resolverCargoParaCandidato,
+  subirCurriculum,
+  crearSolicitudEvaluacion
+} from "@/lib/supabase-db";
 import { useDatos } from "@/context/data-context";
 import { Input } from "@/components/ui/input";
 import { PhoneInput, validarTelefonoCompleto } from "@/components/phone-input";
@@ -32,14 +40,65 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-const formVacio = {
-  nombre: "",
-  rut: "",
-  correo: "",
-  telefono: "",
-  familia: "",
-  cargo: ""
-};
+
+export const ACCEPTED_CV_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+];
+export const MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
+
+export const postulacionSchema = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .min(5, "Ingrese nombre y apellido completo (mínimo 5 caracteres)."),
+  rut: z
+    .string()
+    .trim()
+    .regex(/^\d{1,2}\.\d{3}\.\d{3}-[\dKk]$/, "Ingrese un RUT válido. Ejemplo: 12.345.678-9"),
+  correo: z
+    .string()
+    .trim()
+    .email("Ingrese una dirección de correo electrónico válida."),
+  telefono: z
+    .string()
+    .trim()
+    .refine((val) => !validarTelefonoCompleto(val), {
+      message: "Ingrese un número de teléfono válido."
+    }),
+  familia: z
+    .string()
+    .min(1, "Seleccione el área del cargo."),
+  cargo: z
+    .string()
+    .trim()
+    .min(3, "Especifique el cargo al que postula."),
+  cv: z
+    .custom(
+      (val) => {
+        if (!val) return false;
+        if (typeof window !== "undefined" && val instanceof File) return true;
+        if (typeof val === "object" && typeof val.name === "string" && typeof val.size === "number") return true;
+        return false;
+      },
+      { message: "Debe adjuntar su currículum vitae en formato PDF o Word." }
+    )
+    .refine((file) => file && file.size <= MAX_CV_SIZE, {
+      message: "El archivo no debe superar los 5 MB."
+    })
+    .refine(
+      (file) => {
+        if (!file) return false;
+        const ext = file.name ? file.name.split(".").pop()?.toLowerCase() : "";
+        const validExt = ["pdf", "doc", "docx"].includes(ext);
+        const validType = ACCEPTED_CV_TYPES.includes(file.type);
+        return validType || validExt;
+      },
+      { message: "El formato debe ser PDF o Word (.docx, .doc)." }
+    )
+});
+
 function formatearRut(valor) {
   const limpio = valor.replace(/[^0-9kK]/g, "").toUpperCase().slice(0, 9);
   if (limpio.length <= 1) return limpio;
@@ -48,13 +107,40 @@ function formatearRut(valor) {
   const conPuntos = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${conPuntos}-${dv}`;
 }
-export function PostulacionPage() {
-  const { guardarCandidato } = useDatos();
-  const [form, setForm] = useState(formVacio);
+
+export function PostulacionPage({ initialValues } = {}) {
+  const { guardarCandidato, crearSolicitud } = useDatos();
   const [catalogo, setCatalogo] = useState({
     familias: FAMILIAS,
     cargosPorFamilia: {}
   });
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting }
+  } = useForm({
+    resolver: zodResolver(postulacionSchema),
+    defaultValues: {
+      nombre: "",
+      rut: "",
+      correo: "",
+      telefono: "",
+      familia: "",
+      cargo: "",
+      cv: null,
+      ...initialValues
+    }
+  });
+
+  const formValues = watch();
+  const cvArchivo = watch("cv");
+  const [isDragging, setIsDragging] = useState(false);
+  const [enviado, setEnviado] = useState(null);
+  const [errorEnvio, setErrorEnvio] = useState(null);
 
   useEffect(() => {
     cargarCatalogoSupabase().then((res) => {
@@ -66,92 +152,61 @@ export function PostulacionPage() {
       }
     });
   }, []);
-  const [cvArchivo, setCvArchivo] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [errores, setErrores] = useState({});
-  const [enviado, setEnviado] = useState(null);
-  const [cargando, setCargando] = useState(false);
-  const [errorEnvio, setErrorEnvio] = useState(null);
-  const setCampo = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
+
   function procesarArchivo(archivo) {
     if (!archivo) return;
-    const extension = archivo.name.split(".").pop()?.toLowerCase();
-    if (!["pdf", "doc", "docx"].includes(extension || "")) {
-      setErrores((prev) => ({
-        ...prev,
-        cv: "El formato debe ser PDF o Word (.docx, .doc)."
-      }));
-      return;
-    }
-    const tamanoMB = (archivo.size / (1024 * 1024)).toFixed(1);
-    setCvArchivo({ nombre: archivo.name, tamano: `${tamanoMB} MB` });
-    setErrores((prev) => {
-      const nuevo = { ...prev };
-      delete nuevo.cv;
-      return nuevo;
-    });
+    setValue("cv", archivo, { shouldValidate: true });
   }
+
   function handleDragOver(e) {
     e.preventDefault();
     setIsDragging(true);
   }
+
   function handleDragLeave(e) {
     e.preventDefault();
     setIsDragging(false);
   }
+
   function handleDrop(e) {
     e.preventDefault();
     setIsDragging(false);
     const archivo = e.dataTransfer.files?.[0];
     procesarArchivo(archivo);
   }
-  function validar() {
-    const e = {};
-    if (form.nombre.trim().length < 5) {
-      e.nombre = "Ingrese nombre y apellido completo (m\xEDnimo 5 caracteres).";
-    }
-    if (!/^\d{1,2}\.\d{3}\.\d{3}-[\dK]$/.test(form.rut)) {
-      e.rut = "Ingrese un RUT v\xE1lido. Ejemplo: 12.345.678-9";
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.correo.trim())) {
-      e.correo = "Ingrese una direcci\xF3n de correo electr\xF3nico v\xE1lida.";
-    }
-    const telefonoError = validarTelefonoCompleto(form.telefono);
-    if (telefonoError) { e.telefono = telefonoError; }
-    if (!form.familia) {
-      e.familia = "Seleccione el \xE1rea del cargo.";
-    }
-    if (form.cargo.trim().length < 3) {
-      e.cargo = "Especifique el cargo al que postula.";
-    }
-    if (!cvArchivo) {
-      e.cv = "Debe adjuntar su curr\xEDculum vitae en formato PDF o Word.";
-    }
-    setErrores(e);
-    return Object.keys(e).length === 0;
-  }
-  async function handleSubmit(ev) {
-    ev.preventDefault();
-    if (!validar()) return;
-    setCargando(true);
+
+  async function onSubmit(data) {
     setErrorEnvio(null);
+
+    // 1. Subir currículum a Supabase Storage ANTES de crear el candidato y la solicitud
+    let cvSubido = null;
+    try {
+      cvSubido = await subirCurriculum(data.cv, data.rut);
+    } catch (uploadErr) {
+      console.error("Error al subir currículum a Supabase Storage:", uploadErr);
+      toast.error("Error al subir el currículum. Por favor intenta de nuevo.");
+      setErrorEnvio(
+        uploadErr?.message || "No se pudo subir el archivo de currículum. Inténtalo de nuevo."
+      );
+      return; // Evita crear solicitud huérfana
+    }
 
     let insertado = null;
     let guardadoEnNube = false;
 
     try {
-      // 1. Intentar resolver claves foráneas en la base de datos
-      const cargoResuelto = await resolverCargoParaCandidato(form.familia, form.cargo);
+      // 2. Resolver claves foráneas
+      const cargoResuelto = await resolverCargoParaCandidato(data.familia, data.cargo);
 
-      // 2. Insertar en tabla public.candidato
-      const { data, error } = await supabase
+      // 3. Insertar en tabla public.candidato
+      const { data: candInsertado, error: candErr } = await supabase
         .from("candidato")
         .insert([
           {
-            rut: form.rut,
-            nombre_completo: form.nombre.trim(),
-            correo: form.correo.trim(),
-            telefono: form.telefono.trim(),
+            rut: data.rut,
+            nombre_completo: data.nombre.trim(),
+            correo: data.correo.trim(),
+            telefono: data.telefono.trim(),
             familia_id: cargoResuelto.familia_id,
             cargo_id: cargoResuelto.cargo_id,
             cargo_personalizado: cargoResuelto.cargo_personalizado
@@ -160,25 +215,52 @@ export function PostulacionPage() {
         .select()
         .single();
 
-      if (error) {
-        if (error.code === "23505") {
-          setErrorEnvio("Ya existe una postulación registrada con ese RUT en el sistema.");
-          setCargando(false);
-          return;
-        } else if (error.code === "42501") {
-          console.warn("RLS bloqueó la inserción en Supabase:", error);
+      if (candErr) {
+        if (candErr.code === "23505") {
+          // El RUT ya existe en el sistema
+          const { data: candExistente } = await supabase
+            .from("candidato")
+            .select("id")
+            .ilike("rut", data.rut)
+            .maybeSingle();
+
+          if (candExistente?.id) {
+            insertado = candExistente;
+          } else {
+            setErrorEnvio("Ya existe una postulación registrada con ese RUT en el sistema.");
+            toast.error("Ya existe una postulación con ese RUT.");
+            return;
+          }
+        } else if (candErr.code === "42501") {
+          console.warn("RLS bloqueó la inserción en Supabase:", candErr);
           setErrorEnvio(
             "Permiso denegado por Row Level Security (RLS) en Supabase. Asegúrate de ejecutar el script 'supabase_poblacion.sql' en el SQL Editor de Supabase para activar las políticas de acceso."
           );
-          setCargando(false);
+          toast.error("Error de permisos en el servidor.");
           return;
         } else {
-          throw error;
+          throw candErr;
         }
+      } else {
+        insertado = candInsertado;
       }
 
-      insertado = data;
       guardadoEnNube = true;
+
+      // 4. Insertar en tabla public.solicitud_evaluacion con el CV
+      if (insertado?.id) {
+        try {
+          await crearSolicitudEvaluacion({
+            candidato_id: insertado.id,
+            prioridad: "Media",
+            estado: "Pendiente",
+            curriculum_path: cvSubido.path,
+            curriculum_nombre: cvSubido.nombreOriginal
+          });
+        } catch (solErr) {
+          console.warn("Advertencia al insertar solicitud_evaluacion:", solErr);
+        }
+      }
     } catch (err) {
       console.warn("Fallo al guardar en Supabase Cloud:", err);
       const msg = err?.message || "";
@@ -187,60 +269,78 @@ export function PostulacionPage() {
         setErrorEnvio(
           "Las tablas de Supabase aún no han sido pobladas. Por favor ejecuta el script 'supabase_poblacion.sql' en el SQL Editor de tu proyecto de Supabase para cargar el catálogo de familias/cargos y habilitar los permisos."
         );
-        setCargando(false);
+        toast.error("Error en catálogo de la base de datos.");
         return;
       } else {
         setErrorEnvio(
           err?.message || "Hubo un problema al registrar tu postulación en la base de datos. Inténtalo de nuevo."
         );
-        setCargando(false);
+        toast.error("Error al registrar postulación.");
         return;
       }
     }
 
-    // 3. Enviar correo de confirmación al candidato mediante el servicio de correo
+    // 5. Enviar confirmación por correo
     const fechaFormateada = new Date().toLocaleDateString("es-CL", {
       day: "2-digit",
       month: "long",
       year: "numeric"
     });
     enviarConfirmacionPostulacion({
-      nombre: form.nombre.trim(),
-      rut: form.rut,
-      cargo: form.cargo.trim(),
-      familia: form.familia,
-      correo: form.correo.trim(),
+      nombre: data.nombre.trim(),
+      rut: data.rut,
+      cargo: data.cargo.trim(),
+      familia: data.familia,
+      correo: data.correo.trim(),
       fecha: fechaFormateada
     });
 
-    // 4. Registrar en el contexto y mostrar pantalla de éxito
+    // 6. Registrar en el contexto (fallback / sincronización local)
+    const candIdCtx = insertado?.id ? `c${insertado.id}` : `c${Date.now()}`;
     guardarCandidato({
-      id: insertado?.id ? `c${insertado.id}` : undefined,
+      id: candIdCtx,
       yaEnSupabase: guardadoEnNube,
-      rut: form.rut,
-      nombre: form.nombre.trim(),
-      correo: form.correo.trim(),
-      telefono: form.telefono.trim(),
-      cargo: form.cargo.trim(),
-      familia: form.familia
+      rut: data.rut,
+      nombre: data.nombre.trim(),
+      correo: data.correo.trim(),
+      telefono: data.telefono.trim(),
+      cargo: data.cargo.trim(),
+      familia: data.familia
     });
 
-    setEnviado({
-      nombre: form.nombre.trim(),
-      cargo: form.cargo.trim(),
-      rut: form.rut,
-      fecha: new Date().toLocaleDateString("es-CL", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric"
-      })
+    crearSolicitud({
+      candidatoId: candIdCtx,
+      cargo: data.cargo.trim(),
+      familia: data.familia,
+      psicologo: "Ps. Andrés Miranda",
+      prioridad: "Media",
+      fechaSolicitud: new Date().toISOString().slice(0, 10),
+      curriculum_path: cvSubido.path,
+      curriculum_nombre: cvSubido.nombreOriginal,
+      yaEnSupabase: guardadoEnNube
     });
-    setCargando(false);
+
+    toast.success("¡Postulación enviada exitosamente!");
+
+    setEnviado({
+      nombre: data.nombre.trim(),
+      cargo: data.cargo.trim(),
+      rut: data.rut,
+      fecha: fechaFormateada
+    });
   }
+
   function handleReset() {
-    setForm(formVacio);
-    setCvArchivo(null);
-    setErrores({});
+    reset({
+      nombre: "",
+      rut: "",
+      correo: "",
+      telefono: "",
+      familia: "",
+      cargo: "",
+      cv: null
+    });
+    setErrorEnvio(null);
     setEnviado(null);
   }
   return <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
@@ -357,7 +457,7 @@ export function PostulacionPage() {
   }
             <div className="lg:col-span-7">
               <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm">
-                <form onSubmit={handleSubmit} noValidate className="space-y-6">
+                <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
                   {
     /* Sección 1: Datos Personales */
   }
@@ -374,16 +474,14 @@ export function PostulacionPage() {
                           Nombre completo <span className="text-rose-600">*</span>
                         </Label>
                         <Input
-    id="nombre"
-    name="nombre"
-    autoComplete="name"
-    placeholder="Ej: Carolina Andrea Muñoz Silva"
-    value={form.nombre}
-    onChange={(e) => setCampo("nombre", e.target.value)}
-    aria-invalid={!!errores.nombre}
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
-                        {errores.nombre && <p className="text-xs text-rose-600">{errores.nombre}</p>}
+                          id="nombre"
+                          autoComplete="name"
+                          placeholder="Ej: Carolina Andrea Muñoz Silva"
+                          {...register("nombre")}
+                          aria-invalid={!!errors.nombre}
+                          className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                        />
+                        {errors.nombre && <p className="text-xs text-rose-600">{errors.nombre.message}</p>}
                       </div>
 
                       <div className="space-y-1.5">
@@ -391,17 +489,16 @@ export function PostulacionPage() {
                           RUT <span className="text-rose-600">*</span>
                         </Label>
                         <Input
-    id="rut"
-    name="rut"
-    autoComplete="off"
-    spellCheck={false}
-    placeholder="12.345.678-9"
-    value={form.rut}
-    onChange={(e) => setCampo("rut", formatearRut(e.target.value))}
-    aria-invalid={!!errores.rut}
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 font-mono focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
-                        {errores.rut && <p className="text-xs text-rose-600">{errores.rut}</p>}
+                          id="rut"
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="12.345.678-9"
+                          value={formValues.rut || ""}
+                          onChange={(e) => setValue("rut", formatearRut(e.target.value), { shouldValidate: true })}
+                          aria-invalid={!!errors.rut}
+                          className="bg-white border-slate-300 text-slate-900 text-sm h-10 font-mono focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                        />
+                        {errors.rut && <p className="text-xs text-rose-600">{errors.rut.message}</p>}
                       </div>
 
                       <div className="space-y-1.5">
@@ -409,15 +506,15 @@ export function PostulacionPage() {
                           Teléfono de contacto <span className="text-rose-600">*</span>
                         </Label>
                         <PhoneInput
-    id="telefono"
-    name="telefono"
-    value={form.telefono}
-    onChange={(val) => setCampo("telefono", val)}
-    disabled={false}
-    error={!!errores.telefono}
-    className="bg-white border-slate-300 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
-                        {errores.telefono && <p className="text-xs text-rose-600">{errores.telefono}</p>}
+                          id="telefono"
+                          name="telefono"
+                          value={formValues.telefono || ""}
+                          onChange={(val) => setValue("telefono", val, { shouldValidate: true })}
+                          disabled={false}
+                          error={!!errors.telefono}
+                          className="bg-white border-slate-300 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                        />
+                        {errors.telefono && <p className="text-xs text-rose-600">{errors.telefono.message}</p>}
                       </div>
 
                       <div className="space-y-1.5 sm:col-span-2">
@@ -425,18 +522,16 @@ export function PostulacionPage() {
                           Correo electrónico <span className="text-rose-600">*</span>
                         </Label>
                         <Input
-    id="correo"
-    name="correo"
-    type="email"
-    autoComplete="email"
-    spellCheck={false}
-    placeholder="ejemplo@correo.cl"
-    value={form.correo}
-    onChange={(e) => setCampo("correo", e.target.value)}
-    aria-invalid={!!errores.correo}
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
-                        {errores.correo && <p className="text-xs text-rose-600">{errores.correo}</p>}
+                          id="correo"
+                          type="email"
+                          autoComplete="email"
+                          spellCheck={false}
+                          placeholder="ejemplo@correo.cl"
+                          {...register("correo")}
+                          aria-invalid={!!errors.correo}
+                          className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                        />
+                        {errors.correo && <p className="text-xs text-rose-600">{errors.correo.message}</p>}
                       </div>
                     </div>
                   </div>
@@ -457,32 +552,28 @@ export function PostulacionPage() {
                           Familia del cargo <span className="text-rose-600">*</span>
                         </Label>
                         <Select
-    value={form.familia}
-    onValueChange={(val) => {
-                          setForm((prev) => ({ ...prev, familia: val, cargo: "" }));
-                          if (errores.familia) {
-                            setErrores((prev) => {
-                              const n = { ...prev };
-                              delete n.familia;
-                              return n;
-                            });
-                          }
-                        }}
-  >
+                          value={formValues.familia || ""}
+                          onValueChange={(val) => {
+                            setValue("familia", val, { shouldValidate: true });
+                            setValue("cargo", "", { shouldValidate: true });
+                          }}
+                        >
                           <SelectTrigger
-    id="familia"
-    className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
-    aria-invalid={!!errores.familia}
-  >
+                            id="familia"
+                            className="bg-white border-slate-300 text-slate-900 text-sm h-10 focus-visible:ring-slate-950 focus-visible:border-slate-950"
+                            aria-invalid={!!errors.familia}
+                          >
                             <SelectValue placeholder="Selecciona un área" />
                           </SelectTrigger>
                           <SelectContent className="bg-white border-slate-200">
-                            {(catalogo.familias || FAMILIAS).map((fam) => <SelectItem key={fam} value={fam} className="text-slate-800">
+                            {(catalogo.familias || FAMILIAS).map((fam) => (
+                              <SelectItem key={fam} value={fam} className="text-slate-800">
                                 {fam}
-                              </SelectItem>)}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
-                        {errores.familia && <p className="text-xs text-rose-600">{errores.familia}</p>}
+                        {errors.familia && <p className="text-xs text-rose-600">{errors.familia.message}</p>}
                       </div>
 
                       <div className="space-y-1.5">
@@ -492,21 +583,14 @@ export function PostulacionPage() {
                         <CargoCombobox
                           id="cargo"
                           name="cargo"
-                          familia={form.familia}
-                          value={form.cargo}
+                          familia={formValues.familia}
+                          value={formValues.cargo || ""}
                           onChange={(val) => {
-                            setCampo("cargo", val);
-                            if (errores.cargo && val.trim().length >= 3) {
-                              setErrores((prev) => {
-                                const n = { ...prev };
-                                delete n.cargo;
-                                return n;
-                              });
-                            }
+                            setValue("cargo", val, { shouldValidate: true });
                           }}
-                          error={errores.cargo}
+                          error={errors.cargo?.message}
                         />
-                        {errores.cargo && <p className="text-xs text-rose-600">{errores.cargo}</p>}
+                        {errors.cargo && <p className="text-xs text-rose-600">{errors.cargo.message}</p>}
                       </div>
                     </div>
                   </div>
@@ -519,79 +603,87 @@ export function PostulacionPage() {
                       <Label htmlFor="cv-input" className="text-sm font-semibold text-slate-900">
                         3. Currículum Vitae <span className="text-rose-600">*</span>
                       </Label>
-                      <span className="text-[11px] text-slate-500">PDF o Word, máx. 15 MB</span>
+                      <span className="text-[11px] text-slate-500">PDF o Word, máx. 5 MB</span>
                     </div>
 
-                    {!cvArchivo ? <div
-    onDragOver={handleDragOver}
-    onDragLeave={handleDragLeave}
-    onDrop={handleDrop}
-    className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragging ? "border-slate-900 bg-slate-50" : "border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-400"}`}
-  >
+                    {!cvArchivo ? (
+                      <div
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragging ? "border-slate-900 bg-slate-50" : "border-slate-300 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-400"}`}
+                      >
                         <input
-    id="cv-input"
-    name="cv"
-    type="file"
-    accept=".pdf,.doc,.docx"
-    className="sr-only"
-    onChange={(e) => procesarArchivo(e.target.files?.[0])}
-  />
+                          id="cv-input"
+                          name="cv"
+                          type="file"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          className="sr-only"
+                          onChange={(e) => procesarArchivo(e.target.files?.[0])}
+                        />
                         <div className="flex flex-col items-center gap-2">
                           <Upload className="size-6 text-slate-400" aria-hidden="true" />
                           <div className="text-xs text-slate-600">
                             <label
-    htmlFor="cv-input"
-    className="font-semibold text-slate-900 underline underline-offset-2 cursor-pointer hover:text-slate-700"
-  >
+                              htmlFor="cv-input"
+                              className="font-semibold text-slate-900 underline underline-offset-2 cursor-pointer hover:text-slate-700"
+                            >
                               Selecciona un archivo
                             </label>{" "}
                             o arrástralo hasta aquí
                           </div>
                           <span className="text-[11px] text-slate-500">
-                            Formatos admitidos: .pdf, .docx, .doc
+                            Formatos admitidos: .pdf, .docx, .doc (máx. 5 MB)
                           </span>
                         </div>
-                      </div> : <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <FileText className="size-5 text-slate-600 shrink-0" aria-hidden="true" />
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-slate-900 truncate">
-                              {cvArchivo.nombre}
+                              {cvArchivo.name}
                             </p>
-                            <p className="text-[11px] text-slate-500">{cvArchivo.tamano}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {(cvArchivo.size / (1024 * 1024)).toFixed(1)} MB
+                            </p>
                           </div>
                         </div>
                         <button
-    type="button"
-    onClick={() => setCvArchivo(null)}
-    className="rounded p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-200 transition-colors"
-    aria-label="Quitar archivo adjunto"
-  >
+                          type="button"
+                          onClick={() => setValue("cv", null, { shouldValidate: true })}
+                          className="rounded p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-200 transition-colors"
+                          aria-label="Quitar archivo adjunto"
+                        >
                           <X className="size-4" aria-hidden="true" />
                         </button>
-                      </div>}
+                      </div>
+                    )}
 
-                    {errores.cv && <p className="text-xs text-rose-600">{errores.cv}</p>}
+                    {errors.cv && <p className="text-xs text-rose-600">{errors.cv.message}</p>}
                   </div>
 
                   {
     /* Mensaje visual de error si falla la inserción en Supabase */
   }
-                  {errorEnvio && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                  {errorEnvio && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
                       {errorEnvio}
-                    </div>}
+                    </div>
+                  )}
 
                   {
     /* Botón de envío con estado deshabilitado/cargando */
   }
                   <div className="pt-2">
                     <Button
-    type="submit"
-    disabled={cargando}
-    className="w-full h-11 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
-  >
-                      <span>{cargando ? "Guardando postulaci\xF3n..." : "Enviar postulaci\xF3n"}</span>
-                      {!cargando && <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />}
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full h-11 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    >
+                      <span>{isSubmitting ? "Guardando postulación..." : "Enviar postulación"}</span>
+                      {!isSubmitting && <ArrowRight className="size-4 ml-1.5" aria-hidden="true" />}
                     </Button>
                   </div>
                 </form>

@@ -4,7 +4,12 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { DetalleSolicitudPage } from "../DetalleSolicitudPage";
 import { useDatos } from "@/context/data-context";
 import { useAuth } from "@/context/auth-context";
+import { obtenerUrlCurriculum } from "@/lib/supabase-db";
 import { toast } from "sonner";
+
+vi.mock("@/lib/supabase-db", () => ({
+  obtenerUrlCurriculum: vi.fn(),
+}));
 
 vi.mock("@/context/data-context", () => ({
   useDatos: vi.fn(),
@@ -105,5 +110,63 @@ describe("DetalleSolicitudPage.jsx - Evaluación y Reglas de Negocio", () => {
 
     expect(screen.getByText("Su rol solo permite consultar esta evaluación.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /guardar evaluación/i })).not.toBeInTheDocument();
+  });
+
+  it("debe mostrar el currículum si la solicitud tiene curriculum_path y abrirlo al hacer clic", async () => {
+    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => {});
+    obtenerUrlCurriculum.mockResolvedValue("https://signed-url.com/cv.pdf");
+
+    useDatos.mockReturnValue({
+      solicitudes: [
+        {
+          id: "s10",
+          codigo: "SOL-010",
+          candidatoId: "c1",
+          cargo: "Desarrollador Backend",
+          familia: "Tecnología / IT",
+          psicologo: "Ps. Andrés Miranda",
+          estado: "En proceso",
+          actualizada: "2026-11-01",
+          curriculum_path: "176543210/123456_cv.pdf",
+          curriculum_nombre: "CV_Ignacio_Soto.pdf",
+          evaluacion: {
+            fechaEntrevista: "2026-11-01",
+            conclusiones: "",
+            dictamen: "",
+            preguntasUsadas: {},
+            notasPregunta: {},
+          },
+        },
+      ],
+      candidatos: [
+        { id: "c1", nombre: "Ignacio Soto", rut: "17.654.321-0", correo: "ignacio@aquachile.cl" },
+      ],
+      cambiarEstado: mockCambiarEstado,
+      guardarEvaluacion: mockGuardarEvaluacion,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/solicitudes/s10"]}>
+        <Routes>
+          <Route path="/solicitudes/:id" element={<DetalleSolicitudPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/Currículum Vitae adjunto/i)).toBeInTheDocument();
+    expect(screen.getByText("CV_Ignacio_Soto.pdf")).toBeInTheDocument();
+
+    const botonCv = screen.getByRole("button", { name: /ver cv_ignacio_soto\.pdf/i });
+    expect(botonCv).toBeInTheDocument();
+
+    fireEvent.click(botonCv);
+
+    expect(obtenerUrlCurriculum).toHaveBeenCalledWith("176543210/123456_cv.pdf");
+
+    await vi.waitFor(() => {
+      expect(windowOpenSpy).toHaveBeenCalledWith("https://signed-url.com/cv.pdf", "_blank");
+    });
+
+    windowOpenSpy.mockRestore();
   });
 });

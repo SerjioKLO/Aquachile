@@ -162,3 +162,113 @@ export async function cargarEvaluadoresSupabase() {
   }
 }
 
+/**
+ * Sube un archivo de currículum al bucket 'curriculums' en Supabase Storage.
+ * Ruta: ${rutLimpio}/${Date.now()}_cv.${extension}
+ * Sanea el RUT quitando puntos, guiones y espacios.
+ *
+ * @param {File} file - Objeto File a subir
+ * @param {string} rutCandidato - RUT del candidato
+ * @returns {Promise<{ path: string, nombreOriginal: string }>}
+ */
+export async function subirCurriculum(file, rutCandidato) {
+  if (!file) {
+    throw new Error("Debe proporcionar un archivo de currículum.");
+  }
+  const rutLimpio = String(rutCandidato || "").replace(/[^0-9kK]/g, "").toUpperCase();
+  if (!rutLimpio) {
+    throw new Error("Debe proporcionar un RUT válido para asociar el currículum.");
+  }
+
+  const extension = file.name ? file.name.split(".").pop()?.toLowerCase() : "pdf";
+  const path = `${rutLimpio}/${Date.now()}_cv.${extension}`;
+
+  const { data, error } = await supabase.storage
+    .from("curriculums")
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    path: data?.path || path,
+    nombreOriginal: file.name
+  };
+}
+
+/**
+ * Genera una URL firmada temporal con expiración de 600 segundos (10 minutos)
+ * para previsualizar o descargar el currículum desde el bucket privado 'curriculums'.
+ *
+ * @param {string} curriculumPath - Ruta del archivo en el bucket
+ * @returns {Promise<string>} URL firmada
+ */
+export async function obtenerUrlCurriculum(curriculumPath) {
+  if (!curriculumPath) {
+    throw new Error("Ruta de currículum no especificada.");
+  }
+
+  const { data, error } = await supabase.storage
+    .from("curriculums")
+    .createSignedUrl(curriculumPath, 600);
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.signedUrl || "";
+}
+
+/**
+ * Inserta un registro en la tabla public.solicitud_evaluacion con soporte para
+ * curriculum_path y curriculum_nombre.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>} Registro insertado
+ */
+export async function crearSolicitudEvaluacion({
+  candidato_id,
+  evaluador_id = null,
+  prioridad = "Media",
+  estado = "Pendiente",
+  curriculum_path = null,
+  curriculum_nombre = null,
+  fecha_solicitud
+}) {
+  if (!candidato_id) {
+    throw new Error("candidato_id es requerido para crear una solicitud de evaluación.");
+  }
+
+  const payload = {
+    candidato_id,
+    prioridad: prioridad || "Media",
+    estado: estado || "Pendiente",
+    curriculum_path: curriculum_path || null,
+    curriculum_nombre: curriculum_nombre || null
+  };
+
+  if (evaluador_id) {
+    payload.evaluador_id = evaluador_id;
+  }
+  if (fecha_solicitud) {
+    payload.fecha_solicitud = fecha_solicitud;
+  }
+
+  const { data, error } = await supabase
+    .from("solicitud_evaluacion")
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+

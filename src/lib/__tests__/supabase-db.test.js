@@ -3,12 +3,18 @@ import {
   cargarCatalogoSupabase,
   resolverCargoParaCandidato,
   cargarEvaluadoresSupabase,
+  subirCurriculum,
+  obtenerUrlCurriculum,
+  crearSolicitudEvaluacion,
 } from "../supabase-db";
 import { supabase } from "@/lib/supabase";
 
 vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: vi.fn(),
+    storage: {
+      from: vi.fn(),
+    },
   },
 }));
 
@@ -135,6 +141,131 @@ describe("supabase-db.js - Integración con Supabase", () => {
 
       const evaluadores = await cargarEvaluadoresSupabase();
       expect(evaluadores).toEqual([]);
+    });
+  });
+
+  describe("subirCurriculum", () => {
+    it("debe lanzar error si no se pasa un archivo", async () => {
+      await expect(subirCurriculum(null, "12.345.678-9")).rejects.toThrow(
+        "Debe proporcionar un archivo de currículum."
+      );
+    });
+
+    it("debe sanitizar el RUT y subir el archivo al bucket 'curriculums'", async () => {
+      const mockUpload = vi.fn().mockResolvedValue({
+        data: { path: "123456789/123456_cv.pdf" },
+        error: null,
+      });
+
+      supabase.storage.from.mockReturnValue({
+        upload: mockUpload,
+      });
+
+      const mockFile = { name: "mi_cv.pdf", size: 1024, type: "application/pdf" };
+      const resultado = await subirCurriculum(mockFile, "12.345.678-9");
+
+      expect(supabase.storage.from).toHaveBeenCalledWith("curriculums");
+      expect(mockUpload).toHaveBeenCalledWith(
+        expect.stringMatching(/^123456789\/\d+_cv\.pdf$/),
+        mockFile,
+        expect.objectContaining({ upsert: false })
+      );
+      expect(resultado).toEqual({
+        path: "123456789/123456_cv.pdf",
+        nombreOriginal: "mi_cv.pdf",
+      });
+    });
+
+    it("debe lanzar error si la subida a Storage falla", async () => {
+      supabase.storage.from.mockReturnValue({
+        upload: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Storage bucket limit reached"),
+        }),
+      });
+
+      const mockFile = { name: "curriculum.docx", size: 2048, type: "application/msword" };
+      await expect(subirCurriculum(mockFile, "11.222.333-4")).rejects.toThrow(
+        "Storage bucket limit reached"
+      );
+    });
+  });
+
+  describe("obtenerUrlCurriculum", () => {
+    it("debe lanzar error si no se proporciona curriculumPath", async () => {
+      await expect(obtenerUrlCurriculum("")).rejects.toThrow(
+        "Ruta de currículum no especificada."
+      );
+    });
+
+    it("debe generar URL firmada con 600 segundos de expiración", async () => {
+      const mockCreateSignedUrl = vi.fn().mockResolvedValue({
+        data: { signedUrl: "https://supabase.co/storage/v1/signed/curriculums/cv.pdf?token=abc" },
+        error: null,
+      });
+
+      supabase.storage.from.mockReturnValue({
+        createSignedUrl: mockCreateSignedUrl,
+      });
+
+      const url = await obtenerUrlCurriculum("123456789/123_cv.pdf");
+
+      expect(supabase.storage.from).toHaveBeenCalledWith("curriculums");
+      expect(mockCreateSignedUrl).toHaveBeenCalledWith("123456789/123_cv.pdf", 600);
+      expect(url).toBe("https://supabase.co/storage/v1/signed/curriculums/cv.pdf?token=abc");
+    });
+
+    it("debe lanzar error si createSignedUrl falla", async () => {
+      supabase.storage.from.mockReturnValue({
+        createSignedUrl: vi.fn().mockResolvedValue({
+          data: null,
+          error: new Error("Permiso denegado"),
+        }),
+      });
+
+      await expect(obtenerUrlCurriculum("ruta/invalida.pdf")).rejects.toThrow(
+        "Permiso denegado"
+      );
+    });
+  });
+
+  describe("crearSolicitudEvaluacion", () => {
+    it("debe insertar una solicitud con curriculum_path y curriculum_nombre", async () => {
+      const mockInsert = vi.fn().mockReturnValue({
+        select: () => ({
+          single: async () => ({
+            data: {
+              id: 99,
+              candidato_id: 5,
+              curriculum_path: "123456789/123_cv.pdf",
+              curriculum_nombre: "mi_cv.pdf",
+            },
+            error: null,
+          }),
+        }),
+      });
+
+      supabase.from.mockReturnValue({
+        insert: mockInsert,
+      });
+
+      const res = await crearSolicitudEvaluacion({
+        candidato_id: 5,
+        curriculum_path: "123456789/123_cv.pdf",
+        curriculum_nombre: "mi_cv.pdf",
+      });
+
+      expect(supabase.from).toHaveBeenCalledWith("solicitud_evaluacion");
+      expect(mockInsert).toHaveBeenCalledWith([
+        {
+          candidato_id: 5,
+          prioridad: "Media",
+          estado: "Pendiente",
+          curriculum_path: "123456789/123_cv.pdf",
+          curriculum_nombre: "mi_cv.pdf",
+        },
+      ]);
+      expect(res.id).toBe(99);
     });
   });
 });
