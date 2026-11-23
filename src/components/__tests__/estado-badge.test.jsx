@@ -18,7 +18,22 @@ describe("estado-badge.jsx - Badges de Estado y Dictamen", () => {
       expect(badge.parentElement).toHaveClass("bg-sky-50");
     });
 
-    it("debe renderizar 'Finalizada' con estilo emerald", () => {
+    it("debe renderizar 'Completada' con estilo emerald", () => {
+      render(<EstadoBadge estado="Completada" />);
+      const badge = screen.getByText("Completada");
+      expect(badge).toBeInTheDocument();
+      expect(badge.parentElement).toHaveClass("bg-emerald-50");
+    });
+
+    it("debe renderizar 'Cancelada' con estilo red", () => {
+      render(<EstadoBadge estado="Cancelada" />);
+      const badge = screen.getByText("Cancelada");
+      expect(badge).toBeInTheDocument();
+      expect(badge.parentElement).toHaveClass("bg-red-100");
+      expect(badge.parentElement).toHaveClass("text-red-700");
+    });
+
+    it("debe renderizar 'Finalizada' con estilo emerald por compatibilidad", () => {
       render(<EstadoBadge estado="Finalizada" />);
       const badge = screen.getByText("Finalizada");
       expect(badge).toBeInTheDocument();

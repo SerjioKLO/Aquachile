@@ -41,7 +41,12 @@ describe("DetalleCandidatoPage.jsx - Ficha del Candidato y Pre-análisis IA", ()
   beforeEach(() => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({
-      puede: (permiso) => permiso === "crear_solicitudes" || permiso === "evaluar",
+      rol: "analista",
+      puede: (permiso) =>
+        permiso === "crear_solicitudes" ||
+        permiso === "evaluar" ||
+        permiso === "ver_candidatos" ||
+        permiso === "ver_analisis_ia",
     });
   });
 
@@ -336,5 +341,43 @@ describe("DetalleCandidatoPage.jsx - Ficha del Candidato y Pre-análisis IA", ()
     });
 
     windowConfirmSpy.mockRestore();
+  });
+
+  it("con rol 'evaluador', redirige fuera de la página a /solicitudes y no muestra la ficha ni IA", async () => {
+    const { toast } = await import("sonner");
+    useAuth.mockReturnValue({
+      rol: "evaluador",
+      puede: (permiso) => permiso === "evaluar",
+    });
+
+    useDatos.mockReturnValue({
+      candidatos: [
+        {
+          id: "c1",
+          nombre: "Francisca Silva",
+          rut: "18.234.567-8",
+          cargo: "Desarrollador Full Stack",
+          curriculum_path: "cvs/francisca.pdf",
+          curriculum_nombre: "CV_Francisca_Silva.pdf",
+        },
+      ],
+      solicitudes: [],
+      guardarAnalisisIA: mockGuardarAnalisisIA,
+      psicologos: [],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/candidatos/c1"]}>
+        <Routes>
+          <Route path="/candidatos/:id" element={<DetalleCandidatoPage />} />
+          <Route path="/solicitudes" element={<div>Página de Solicitudes</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("Página de Solicitudes")).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/acceso restringido/i)
+    );
   });
 });

@@ -27,7 +27,8 @@ describe("CandidatosPage.jsx - Eliminación unificada con modal interno", () => 
   beforeEach(() => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({
-      puede: (permiso) => permiso === "editar_candidatos",
+      rol: "analista",
+      puede: (permiso) => permiso === "editar_candidatos" || permiso === "ver_candidatos",
     });
   });
 
@@ -119,5 +120,38 @@ describe("CandidatosPage.jsx - Eliminación unificada con modal interno", () => 
     fireEvent.click(btnCancelar);
 
     expect(mockEliminarCandidato).not.toHaveBeenCalled();
+  });
+
+  it("con rol 'evaluador', redirige a /solicitudes y no muestra la tabla de candidatos", async () => {
+    useAuth.mockReturnValue({
+      rol: "evaluador",
+      puede: (permiso) => permiso === "evaluar",
+    });
+
+    useDatos.mockReturnValue({
+      candidatos: [
+        {
+          id: "c1",
+          nombre: "Francisca Silva",
+          rut: "18.234.567-8",
+          correo: "francisca@aquachile.cl",
+          telefono: "+56 9 8765 4321",
+          cargo: "Desarrollador Full Stack",
+          familia: "Tecnología / IT",
+        },
+      ],
+      solicitudes: [],
+      eliminarCandidato: mockEliminarCandidato,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/candidatos"]}>
+        <CandidatosPage />
+      </MemoryRouter>
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/acceso restringido/i)
+    );
   });
 });

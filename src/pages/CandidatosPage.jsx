@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Search, UserPlus, Pencil, Trash2, Eye, ArrowRight } from "lucide-react";
 import { useDatos } from "@/context/data-context";
 import { useAuth } from "@/context/auth-context";
@@ -34,7 +34,17 @@ import { FAMILIAS, formatearFecha } from "@/lib/domain";
 import { toast } from "sonner";
 export function CandidatosPage() {
   const { candidatos, solicitudes, eliminarCandidato } = useDatos();
-  const { puede } = useAuth();
+  const { rol, puede } = useAuth();
+  const navigate = useNavigate();
+
+  // El evaluador no tiene acceso al módulo de candidatos
+  useEffect(() => {
+    if (rol === "evaluador" || (rol && !puede("ver_candidatos"))) {
+      toast.error("Acceso restringido: El rol Evaluador no tiene acceso al módulo de candidatos.");
+      navigate("/solicitudes", { replace: true });
+    }
+  }, [rol, puede, navigate]);
+
   const [busqueda, setBusqueda] = useState("");
   const [familia, setFamilia] = useState("todas");
   const [editar, setEditar] = useState(null);

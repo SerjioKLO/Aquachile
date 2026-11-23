@@ -139,7 +139,11 @@ export function AuthProvider({ children }) {
       usuarioActual,
       ingresar,
       salir,
-      puede
+      puede,
+      esEvaluador: rol === "evaluador",
+      esAnalista: rol === "analista",
+      esAdmin: rol === "admin",
+      puedeVerIa: rol !== "evaluador" && (rol === "analista" || rol === "admin" || (rol && PERMISOS_POR_ROL[rol]?.includes("ver_analisis_ia")))
     }),
     [rol, listo, usuarioActual, ingresar, salir, puede]
   );

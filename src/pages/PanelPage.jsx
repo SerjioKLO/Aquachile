@@ -5,6 +5,7 @@ import {
   Clock,
   Activity,
   CheckCircle2,
+  Ban,
   UserPlus,
   FilePlus2,
   Search,
@@ -36,11 +37,17 @@ export function PanelPage() {
   const totalCandidatos = candidatos.length;
   const pendientes = solicitudes.filter((s) => s.estado === "Pendiente").length;
   const enProceso = solicitudes.filter((s) => s.estado === "En proceso").length;
-  const finalizadas = solicitudes.filter((s) => s.estado === "Finalizada").length;
+  const completadas = solicitudes.filter(
+    (s) => s.estado === "Completada" || s.estado === "Finalizada"
+  ).length;
+  const canceladas = solicitudes.filter((s) => s.estado === "Cancelada").length;
+
   const totalSolicitudes = solicitudes.length || 1;
-  const pctPendientes = Math.round(pendientes / totalSolicitudes * 100);
-  const pctProceso = Math.round(enProceso / totalSolicitudes * 100);
-  const pctFinalizadas = Math.round(finalizadas / totalSolicitudes * 100);
+  const pctPendientes = Math.round((pendientes / totalSolicitudes) * 100);
+  const pctProceso = Math.round((enProceso / totalSolicitudes) * 100);
+  const pctCompletadas = Math.round((completadas / totalSolicitudes) * 100);
+  const pctCanceladas = Math.round((canceladas / totalSolicitudes) * 100);
+
   const kpis = useMemo(
     () => [
       {
@@ -53,7 +60,7 @@ export function PanelPage() {
         label: "Pendientes",
         valor: pendientes,
         icon: Clock,
-        descripcion: "En espera de revisi\xF3n"
+        descripcion: "En espera de revisión"
       },
       {
         label: "En proceso",
@@ -62,20 +69,29 @@ export function PanelPage() {
         descripcion: "Entrevista o pruebas activas"
       },
       {
-        label: "Finalizadas",
-        valor: finalizadas,
+        label: "Completadas",
+        valor: completadas,
         icon: CheckCircle2,
         descripcion: "Con dictamen emitido"
+      },
+      {
+        label: "Canceladas",
+        valor: canceladas,
+        icon: Ban,
+        descripcion: "Anuladas o desistidas"
       }
     ],
-    [totalCandidatos, pendientes, enProceso, finalizadas]
+    [totalCandidatos, pendientes, enProceso, completadas, canceladas]
   );
   const recientes = useMemo(() => {
     return [...solicitudes].filter((s) => {
       const nombre = nombreCandidato(s.candidatoId).toLowerCase();
       const texto = busqueda.toLowerCase().trim();
       const coincideBusqueda = !texto || nombre.includes(texto) || s.codigo.toLowerCase().includes(texto) || s.cargo.toLowerCase().includes(texto) || s.psicologo.toLowerCase().includes(texto);
-      const coincideEstado = filtroEstado === "todos" || s.estado === filtroEstado;
+      const coincideEstado =
+        filtroEstado === "todos" ||
+        s.estado === filtroEstado ||
+        (filtroEstado === "Completada" && s.estado === "Finalizada");
       return coincideBusqueda && coincideEstado;
     }).sort((a, b) => b.actualizada.localeCompare(a.actualizada)).slice(0, 8);
   }, [solicitudes, busqueda, filtroEstado, nombreCandidato]);
@@ -114,14 +130,13 @@ export function PanelPage() {
         </div>
       </div>
 
-      {
-    /* Tarjetas de Indicadores (KPIs) */
-  }
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {kpis.map((k) => <div
-    key={k.label}
-    className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-2"
-  >
+      {/* Tarjetas de Indicadores (KPIs) */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {kpis.map((k) => (
+          <div
+            key={k.label}
+            className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-2"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">{k.label}</span>
               <k.icon className="size-4 text-slate-400" aria-hidden="true" />
@@ -130,12 +145,11 @@ export function PanelPage() {
               {k.valor}
             </p>
             <p className="text-[11px] text-slate-500">{k.descripcion}</p>
-          </div>)}
+          </div>
+        ))}
       </div>
 
-      {
-    /* Barra de progreso de estados */
-  }
+      {/* Barra de progreso de estados */}
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-2xs space-y-2.5">
         <div className="flex items-center justify-between text-xs text-slate-600">
           <span className="font-semibold text-slate-900">
@@ -145,20 +159,25 @@ export function PanelPage() {
 
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 flex">
           <div
-    style={{ width: `${pctPendientes}%` }}
-    className="bg-amber-400 transition-[width] duration-300"
-    title={`Pendientes: ${pendientes} (${pctPendientes}%)`}
-  />
+            style={{ width: `${pctPendientes}%` }}
+            className="bg-amber-400 transition-[width] duration-300"
+            title={`Pendientes: ${pendientes} (${pctPendientes}%)`}
+          />
           <div
-    style={{ width: `${pctProceso}%` }}
-    className="bg-sky-500 transition-[width] duration-300"
-    title={`En proceso: ${enProceso} (${pctProceso}%)`}
-  />
+            style={{ width: `${pctProceso}%` }}
+            className="bg-sky-500 transition-[width] duration-300"
+            title={`En proceso: ${enProceso} (${pctProceso}%)`}
+          />
           <div
-    style={{ width: `${pctFinalizadas}%` }}
-    className="bg-emerald-500 transition-[width] duration-300"
-    title={`Finalizadas: ${finalizadas} (${pctFinalizadas}%)`}
-  />
+            style={{ width: `${pctCompletadas}%` }}
+            className="bg-emerald-500 transition-[width] duration-300"
+            title={`Completadas: ${completadas} (${pctCompletadas}%)`}
+          />
+          <div
+            style={{ width: `${pctCanceladas}%` }}
+            className="bg-rose-500 transition-[width] duration-300"
+            title={`Canceladas: ${canceladas} (${pctCanceladas}%)`}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-5 text-xs text-slate-600 pt-0.5">
@@ -181,17 +200,23 @@ export function PanelPage() {
           <div className="flex items-center gap-1.5">
             <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
             <span>
-              Finalizadas:{" "}
-              <strong className="text-slate-900 font-medium tabular-nums">{finalizadas}</strong> (
-              {pctFinalizadas}%)
+              Completadas:{" "}
+              <strong className="text-slate-900 font-medium tabular-nums">{completadas}</strong> (
+              {pctCompletadas}%)
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-rose-500" aria-hidden="true" />
+            <span>
+              Canceladas:{" "}
+              <strong className="text-slate-900 font-medium tabular-nums">{canceladas}</strong> (
+              {pctCanceladas}%)
             </span>
           </div>
         </div>
       </div>
 
-      {
-    /* Tabla de Actividad Reciente */
-  }
+      {/* Tabla de Actividad Reciente */}
       <div className="rounded-lg border border-slate-200 bg-white shadow-2xs overflow-hidden">
         <div className="border-b border-slate-200 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -203,45 +228,50 @@ export function PanelPage() {
             </div>
 
             <Link
-    to="/solicitudes"
-    className="text-xs font-medium text-slate-700 hover:text-slate-950 hover:underline flex items-center gap-1"
-  >
+              to="/solicitudes"
+              className="text-xs font-medium text-slate-700 hover:text-slate-950 hover:underline flex items-center gap-1"
+            >
               <span>Ver todas las solicitudes</span>
               <ArrowRight className="size-3" aria-hidden="true" />
             </Link>
           </div>
 
-          {
-    /* Barra de búsqueda y filtros */
-  }
+          {/* Barra de búsqueda y filtros */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
             <div className="relative w-full sm:w-64">
               <Search
-    className="absolute left-2.5 top-2.5 size-3.5 text-slate-400"
-    aria-hidden="true"
-  />
+                className="absolute left-2.5 top-2.5 size-3.5 text-slate-400"
+                aria-hidden="true"
+              />
               <Input
-    placeholder="Buscar candidato, código o cargo…"
-    value={busqueda}
-    onChange={(e) => setBusqueda(e.target.value)}
-    className="bg-white border-slate-300 text-xs h-8 pl-8 rounded-md focus-visible:ring-slate-950 focus-visible:border-slate-950"
-  />
+                placeholder="Buscar candidato, código o cargo…"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="bg-white border-slate-300 text-xs h-8 pl-8 rounded-md focus-visible:ring-slate-950 focus-visible:border-slate-950"
+              />
             </div>
 
             <div className="flex flex-wrap gap-1">
               {[
-    { id: "todos", label: "Todas" },
-    { id: "Pendiente", label: "Pendientes" },
-    { id: "En proceso", label: "En proceso" },
-    { id: "Finalizada", label: "Finalizadas" }
-  ].map((f) => <button
-    key={f.id}
-    type="button"
-    onClick={() => setFiltroEstado(f.id)}
-    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${filtroEstado === f.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"}`}
-  >
+                { id: "todos", label: "Todas" },
+                { id: "Pendiente", label: "Pendientes" },
+                { id: "En proceso", label: "En proceso" },
+                { id: "Completada", label: "Completadas" },
+                { id: "Cancelada", label: "Canceladas" }
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFiltroEstado(f.id)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    filtroEstado === f.id
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
                   {f.label}
-                </button>)}
+                </button>
+              ))}
             </div>
           </div>
         </div>

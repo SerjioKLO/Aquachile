@@ -12,11 +12,23 @@ const estadosConfig = {
     border: "border-sky-200",
     dot: "bg-sky-500"
   },
+  Completada: {
+    bg: "bg-emerald-50",
+    text: "text-emerald-800",
+    border: "border-emerald-200",
+    dot: "bg-emerald-600"
+  },
   Finalizada: {
     bg: "bg-emerald-50",
     text: "text-emerald-800",
     border: "border-emerald-200",
     dot: "bg-emerald-600"
+  },
+  Cancelada: {
+    bg: "bg-red-100",
+    text: "text-red-700",
+    border: "border-red-200",
+    dot: "bg-red-500"
   }
 };
 export function EstadoBadge({ estado }) {

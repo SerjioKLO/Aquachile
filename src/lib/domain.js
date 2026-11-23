@@ -32,9 +32,10 @@ export const PERMISOS_POR_ROL = {
     "ver_candidatos",
     "editar_candidatos",
     "ver_solicitudes",
-    "crear_solicitudes"
+    "crear_solicitudes",
+    "ver_analisis_ia"
   ],
-  evaluador: ["ver_panel", "ver_candidatos", "ver_solicitudes", "evaluar"],
+  evaluador: ["ver_panel", "ver_solicitudes", "evaluar"],
   admin: [
     "ver_panel",
     "ver_candidatos",
@@ -42,9 +43,10 @@ export const PERMISOS_POR_ROL = {
     "ver_solicitudes",
     "crear_solicitudes",
     "evaluar",
-    "administrar"
+    "administrar",
+    "ver_analisis_ia"
   ],
-  jefatura: ["ver_panel", "ver_candidatos", "ver_solicitudes"]
+  jefatura: ["ver_panel", "ver_solicitudes"]
 };
 export const FAMILIAS = [
   "Operaciones / Producci\xF3n",
@@ -54,7 +56,7 @@ export const FAMILIAS = [
   "Calidad y Medio Ambiente",
   "Finanzas y Administraci\xF3n"
 ];
-export const ESTADOS = ["Pendiente", "En proceso", "Finalizada"];
+export const ESTADOS = ["Pendiente", "En proceso", "Completada", "Cancelada"];
 export const DICTAMENES = ["Recomendado", "Con observaciones", "No recomendado"];
 export const CARGOS_INICIALES = [
   {

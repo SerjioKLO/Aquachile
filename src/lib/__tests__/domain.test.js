@@ -93,7 +93,7 @@ describe("domain.js - Modelo de Dominio y Constantes", () => {
     });
 
     it("los estados y dictámenes deben tener los valores esperados", () => {
-      expect(ESTADOS).toEqual(["Pendiente", "En proceso", "Finalizada"]);
+      expect(ESTADOS).toEqual(["Pendiente", "En proceso", "Completada", "Cancelada"]);
       expect(DICTAMENES).toEqual(["Recomendado", "Con observaciones", "No recomendado"]);
     });
 

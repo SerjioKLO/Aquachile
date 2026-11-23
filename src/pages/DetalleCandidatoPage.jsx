@@ -1,5 +1,5 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ConfirmarEliminarCandidatoDialog } from "@/components/ConfirmarEliminarCandidatoDialog";
 import {
   ArrowLeft,
@@ -29,7 +29,17 @@ export function DetalleCandidatoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { candidatos, solicitudes, guardarAnalisisIA, eliminarCandidato } = useDatos();
-  const { puede } = useAuth();
+  const { rol, puede } = useAuth();
+
+  // El evaluador no debe acceder a fichas de preselección con IA
+  useEffect(() => {
+    if (rol === "evaluador" || (rol && !puede("ver_candidatos"))) {
+      toast.error("Acceso restringido: El rol Evaluador no tiene acceso a la ficha de preselección.");
+      navigate("/solicitudes", { replace: true });
+    }
+  }, [rol, puede, navigate]);
+
+  const puedeVerIa = rol !== "evaluador" && (rol === "analista" || rol === "admin" || puede("ver_analisis_ia") || puede("crear_solicitudes"));
 
   const candidato = candidatos.find((c) => c.id === id);
   const solicitudesCandidato = solicitudes.filter((s) => s.candidatoId === id);
@@ -249,15 +259,17 @@ export function DetalleCandidatoPage() {
       </Card>
 
       {/* Tarjeta de Pre-análisis IA del Currículum (GroqCloud / Llama 3.3) */}
-      <AnalisisIaCard
-        cvPath={cvPath}
-        cvNombre={cvNombre}
-        analisis={analisisIa}
-        fechaAnalisis={analisisIaFecha}
-        cargo={candidato.cargo}
-        analizando={analizandoIa}
-        onAnalizar={handleAnalizarCv}
-      />
+      {puedeVerIa && (
+        <AnalisisIaCard
+          cvPath={cvPath}
+          cvNombre={cvNombre}
+          analisis={analisisIa}
+          fechaAnalisis={analisisIaFecha}
+          cargo={candidato.cargo}
+          analizando={analizandoIa}
+          onAnalizar={handleAnalizarCv}
+        />
+      )}
 
       {/* Modal de Solicitud de Evaluación preseleccionando a este candidato */}
       <SolicitudDialog

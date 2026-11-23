@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   ShieldAlert,
   HelpCircle,
-  TrendingUp
+  TrendingUp,
+  Ban
 } from "lucide-react";
 import { useDatos, generarAnalisisIaMock } from "@/context/data-context";
 import { useAuth } from "@/context/auth-context";
@@ -46,12 +47,16 @@ import { cn } from "@/lib/utils";
 const iconos = {
   Pendiente: Circle,
   "En proceso": Loader2,
-  Finalizada: CheckCircle2
+  Completada: CheckCircle2,
+  Finalizada: CheckCircle2,
+  Cancelada: Ban
 };
 export function DetalleSolicitudPage() {
   const { id } = useParams();
   const { solicitudes, candidatos, cambiarEstado, guardarEvaluacion, guardarAnalisisIA } = useDatos();
-  const { puede } = useAuth();
+  const { rol, puede } = useAuth();
+  // El psicólogo evaluador NO debe ver ni interactuar con el agente de IA para evitar sesgos
+  const puedeVerIa = rol !== "evaluador" && (rol === "analista" || rol === "admin" || puede("ver_analisis_ia") || puede("crear_solicitudes"));
   const solicitud = solicitudes.find((s) => s.id === id);
   const candidato = candidatos.find((c) => c.id === solicitud?.candidatoId);
 
@@ -151,20 +156,39 @@ export function DetalleSolicitudPage() {
       </div>;
   }
   const editable = puede("evaluar");
-  const preguntas = PREGUNTAS_POR_FAMILIA[solicitud.familia];
-  const usadas = preguntas.filter((p) => form.preguntasUsadas[p]).length;
+
+  // Reemplazar preguntas base por preguntas_sugeridas de la IA si existen en el candidato o solicitud
+  const preguntasIa =
+    Array.isArray(candidato?.analisis_ia?.preguntas_sugeridas) &&
+    candidato.analisis_ia.preguntas_sugeridas.length > 0
+      ? candidato.analisis_ia.preguntas_sugeridas
+      : Array.isArray(analisisIa?.preguntas_sugeridas) &&
+        analisisIa.preguntas_sugeridas.length > 0
+      ? analisisIa.preguntas_sugeridas
+      : null;
+
+  const tienePreguntasIa = Boolean(preguntasIa && preguntasIa.length > 0);
+  const preguntasBase = PREGUNTAS_POR_FAMILIA[solicitud.familia] || [];
+  const preguntas = tienePreguntasIa ? preguntasIa : preguntasBase;
+  const usadas = preguntas.filter((p) => form?.preguntasUsadas?.[p]).length;
   function guardar() {
     if (!solicitud) return;
-    if (solicitud.estado === "Finalizada" && !form.dictamen) {
-      toast.error("Debe seleccionar un dictamen para una evaluaci\xF3n finalizada.");
+    if (
+      (solicitud.estado === "Completada" || solicitud.estado === "Finalizada") &&
+      !form.dictamen
+    ) {
+      toast.error("Debe seleccionar un dictamen para una evaluación completada.");
       return;
     }
     guardarEvaluacion(solicitud.id, form);
-    toast.success("Evaluaci\xF3n guardada");
+    toast.success("Evaluación guardada");
   }
   function avanzar(estado) {
     if (!solicitud) return;
-    if (estado === "Finalizada" && (!form.dictamen || !form.conclusiones.trim())) {
+    if (
+      (estado === "Completada" || estado === "Finalizada") &&
+      (!form.dictamen || !form.conclusiones.trim())
+    ) {
       toast.error("Complete conclusiones y dictamen antes de finalizar.");
       return;
     }
@@ -241,7 +265,7 @@ export function DetalleSolicitudPage() {
       </Card>
 
       {/* Tarjeta de Pre-análisis IA del Currículum (GroqCloud / Llama 3.3) */}
-      {cvPath && (
+      {cvPath && puedeVerIa && (
         <>
           {analizandoIa ? (
             <Card className="mt-4 p-6 border-primary/30 bg-primary/5">
@@ -452,29 +476,56 @@ export function DetalleSolicitudPage() {
       )}
 
       <Card className="mt-4 p-6">
-        <h2 className="text-base font-semibold">Flujo de estados</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">Flujo de estados</h2>
+          <span className="text-xs text-muted-foreground">
+            Estado actual: <strong className="text-foreground">{solicitud.estado}</strong>
+          </span>
+        </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {ESTADOS.map((e, i) => {
-    const Icono = iconos[e];
-    const actual = ESTADOS.indexOf(solicitud.estado);
-    const alcanzado = i <= actual;
-    return <div key={e} className="flex items-center gap-3">
+            const Icono = iconos[e] || Circle;
+            const esActual = solicitud.estado === e;
+            const esCancelada = e === "Cancelada";
+
+            let estiloBoton = "";
+            if (esActual) {
+              if (esCancelada) {
+                estiloBoton =
+                  "border-red-600 bg-red-600 text-white hover:bg-red-700 shadow-xs font-semibold";
+              } else {
+                estiloBoton =
+                  "border-primary bg-primary text-primary-foreground shadow-xs font-semibold";
+              }
+            } else {
+              if (esCancelada) {
+                estiloBoton =
+                  "border-red-300 text-red-600 hover:border-red-600 hover:bg-red-50 hover:text-red-700";
+              } else {
+                estiloBoton =
+                  "border-border text-muted-foreground hover:border-primary hover:text-foreground";
+              }
+            }
+
+            return (
+              <div key={e} className="flex items-center gap-3">
                 <button
-      type="button"
-      disabled={!editable || i === actual}
-      onClick={() => avanzar(e)}
-      className={cn(
-        "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-        alcanzado ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary hover:text-foreground",
-        (!editable || i === actual) && "cursor-default opacity-90"
-      )}
-    >
+                  type="button"
+                  disabled={!editable || esActual}
+                  onClick={() => avanzar(e)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
+                    estiloBoton,
+                    (!editable || esActual) && "cursor-default opacity-90"
+                  )}
+                >
                   <Icono className="size-4" />
                   {e}
                 </button>
-                {i < ESTADOS.length - 1 && <span className="h-px w-8 bg-border" />}
-              </div>;
-  })}
+                {i < ESTADOS.length - 1 && <span className="h-px w-6 bg-border hidden sm:inline-block" />}
+              </div>
+            );
+          })}
         </div>
         {!editable && <p className="mt-3 text-xs text-muted-foreground">
             Su rol solo permite consultar esta evaluación.
@@ -485,6 +536,25 @@ export function DetalleSolicitudPage() {
         <Card className="p-6 lg:col-span-3">
           <h2 className="text-base font-semibold">Formulario clínico</h2>
           <div className="mt-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="estado-solicitud">Estado de la solicitud</Label>
+              <Select
+                value={solicitud.estado}
+                disabled={!editable}
+                onValueChange={(v) => avanzar(v)}
+              >
+                <SelectTrigger id="estado-solicitud" className="w-full">
+                  <SelectValue placeholder="Seleccione un estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTADOS.map((e) => (
+                    <SelectItem key={e} value={e}>
+                      {e}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="fechaEntrevista">Fecha de entrevista</Label>
               <Input
@@ -538,7 +608,9 @@ export function DetalleSolicitudPage() {
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Batería para la familia {solicitud.familia}.
+            {tienePreguntasIa
+              ? `Preguntas personalizadas generadas por IA según el perfil de ${solicitud.cargo}.`
+              : `Batería para la familia ${solicitud.familia}.`}
           </p>
           <ul className="mt-4 space-y-3">
             {preguntas.map((p) => <li key={p} className="rounded-lg border border-border p-3">

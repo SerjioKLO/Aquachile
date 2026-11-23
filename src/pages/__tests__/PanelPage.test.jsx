@@ -29,13 +29,14 @@ describe("PanelPage.jsx - Dashboard y Cálculo de Métricas KPI", () => {
       solicitudes: [
         { id: "s1", codigo: "SOL-001", candidatoId: "c1", cargo: "Supervisor", psicologo: "Ps. Camila", estado: "Pendiente", actualizada: "2026-11-01" },
         { id: "s2", codigo: "SOL-002", candidatoId: "c2", cargo: "Analista", psicologo: "Ps. Andrés", estado: "En proceso", actualizada: "2026-11-02" },
-        { id: "s3", codigo: "SOL-003", candidatoId: "c3", cargo: "Enfermera", psicologo: "Ps. Camila", estado: "Finalizada", actualizada: "2026-11-03" },
+        { id: "s3", codigo: "SOL-003", candidatoId: "c3", cargo: "Enfermera", psicologo: "Ps. Camila", estado: "Completada", actualizada: "2026-11-03" },
+        { id: "s4", codigo: "SOL-004", candidatoId: "c1", cargo: "Operario", psicologo: "Ps. Andrés", estado: "Cancelada", actualizada: "2026-11-04" },
       ],
       nombreCandidato: (id) => (id === "c1" ? "Candidato Uno" : id === "c2" ? "Candidato Dos" : "Candidato Tres"),
     });
   });
 
-  it("debe calcular y mostrar correctamente los KPIs de resumen", () => {
+  it("debe calcular y mostrar correctamente los KPIs de resumen con los 4 estados", () => {
     render(
       <MemoryRouter>
         <PanelPage />
@@ -46,10 +47,11 @@ describe("PanelPage.jsx - Dashboard y Cálculo de Métricas KPI", () => {
     expect(screen.getByText("Total candidatos")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
 
-    // Estados
+    // 4 Estados consistentes
     expect(screen.getAllByText("Pendientes")[0]).toBeInTheDocument();
     expect(screen.getAllByText("En proceso")[0]).toBeInTheDocument();
-    expect(screen.getAllByText("Finalizadas")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Completadas")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Canceladas")[0]).toBeInTheDocument();
   });
 
   it("debe filtrar la tabla de solicitudes recientes al escribir en el buscador", () => {
